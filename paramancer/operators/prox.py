@@ -1,220 +1,91 @@
 import torch
 import torch.linalg as la
 from .norms import l2, l2_in
+from ._docstrings import prox_doc
+from ._util import dual
 
-from typing import Union, Tuple, Callable, Any
+from typing import Union, Tuple
 
-def dual(
-    primal: Callable[..., torch.Tensor],
-    inps: Tuple[Any, ...]
-):
-    """Given the prox of a function f, computes the prox of f*, i.e., the \
-        Fenchel conjugate of f, by using Moreau Identity.
 
-    Args:
-        primal (callable): A function to compute the prox of f.
-        inps (tuple): Input arguments of the prox of f* or f. Prox is \
-            computed w.r.t the first argument only. Rest are the parameters.
+# %% Simple Vector Norms
 
-    Returns:
-        prox of the dual of f at given input values.
-    """
-    return inps[0] - primal(*inps)
-
-# %% Simple Norms
-
-def li_ball(
-    x: torch.Tensor,
-    rad: torch.Tensor
-) -> torch.Tensor:
-    """Computes the projection of a point onto a ball given by infinity norm.
-    
-    Args:
-        x (torch.Tensor): Given point.
-        rad (torch.Tensor): Radius of the ball. Either rad.numel() must be 1 \
-            or rad.shape should be the same as x.shape.
-
-    Returns:
-        torch.Tensor: projection onto the infinity ball. Has same shape as x.
-    """
-    return torch.maximum(torch.minimum(x, rad), -rad)
-
-def l1_norm(
-    x: torch.Tensor,
-    scal: torch.Tensor
-) -> torch.Tensor:
-    """Computes the prox of l1 norm at a point, i.e.,
-                    prox         (x)
-                        scal*|.|
-                                1
-
-    Args:
-        x (torch.Tensor): Given point.
-        scal (torch.Tensor): Scale of l1 norm. Either scal.numel() must be \
-            1 or scal.shape should be the same as x.shape.
-
-    Returns:
-        torch.Tensor: prox of l1 norm at a point. Has same shape as x.
-    """
-    return dual(li_ball, (x, scal))
+def inf_ball(p: torch.Tensor, rad: torch.Tensor) -> torch.Tensor:
+    return torch.maximum(torch.minimum(p, rad), -rad)
+def l1_norm(p: torch.Tensor, scal: torch.Tensor) -> torch.Tensor:
+    return dual(inf_ball, (p, scal))
 
 
 def l2_ball(
-    x: torch.Tensor,
-    rad: torch.Tensor,
-    eps: float=1e-8
+    p: torch.Tensor, rad: torch.Tensor, eps: float=1e-8
 ) -> torch.Tensor:
-    """Computes the projection of a point onto a ball given by Euclidean norm.
-
-    Args:
-        x (torch.Tensor): Given point.
-        rad (torch.Tensor): Radius of the ball. rad.numel() must be 1.
-        eps (float): small value to ensure norms.l2(l2_ball(x)) <= rad.
-
-    Returns:
-        torch.Tensor: projection onto the Euclidean ball. Has same shape as x.
-    """
-    return x / max(1., l2(x) / rad + eps)
+    return p / max(1., l2(p) / rad + eps)
 def l2_norm(
-    x: torch.Tensor,
-    scal: torch.Tensor
+    p: torch.Tensor, scal: torch.Tensor, eps: float=1e-8
 ) -> torch.Tensor:
-    """Computes the prox of Euclidean norm at a point, i.e.,
-                    prox         (x)
-                        scal*|.|
-                                2
-
-    Args:
-        x (torch.Tensor): Given point.
-        scal (torch.Tensor): Scale of Euclidean norm. scal.numel() must be 1.
-
-    Returns:
-        torch.Tensor: prox of Euclidean norm at a point. Has same shape as x.
-    """
-    return dual(l2_ball, (x, scal))
+    return dual(l2_ball, (p, scal))
 
 
-def lo_ball(
-    X: torch.Tensor,
-    rad: torch.Tensor
-) -> torch.Tensor:
-    """Computes the projection of a point onto a ball given by spectral or \
-        operator norm.
+# %% Simple Matrix Norms
 
-    Args:
-        X (torch.Tensor): Given point. X.ndim must be 2.
-        rad (torch.Tensor): Radius of the ball. Either rad.numel() must be \
-            1 or rad.shape should be the same as (rank(X),).
-
-    Returns:
-        torch.Tensor: projection onto the spectral norm ball. Has same shape \
-            as X.
-    """
-    U, s, Vh = la.svd(X, full_matrices=False)
+def spec_ball(p: torch.Tensor, rad: torch.Tensor) -> torch.Tensor:
+    U, s, Vh = la.svd(p, full_matrices=False)
     ps = torch.minimum(s, rad)
     return U @ ps.diag() @ Vh
-def ln_norm(
-    X: torch.Tensor,
-    scal: torch.Tensor
-) -> torch.Tensor:
-    """Computes the prox of nuclear norm at a point, i.e.,
-                    prox         (X)
-                        scal*|.|
-                                n
-
-    Args:
-        X (torch.Tensor): Given point. X.ndim must be 2.
-        scal (torch.Tensor): Scale of nuclear norm. Either scal.numel() must \
-            be 1 or scal.shape should be the same as (rank(X),).
-
-    Returns:
-        torch.Tensor: prox of nuclear norm at a point. Has same shape as X.
-    """
-    return dual(lo_ball, (X, scal))
+def nuc_norm(p: torch.Tensor, scal: torch.Tensor) -> torch.Tensor:
+    return dual(spec_ball, (p, scal))
 
 
-# %% Group Norms
+# %% Composite Vector Norms
 
-def l2i_ball(
-    X: torch.Tensor,
+def l2_inf_ball(
+    p: torch.Tensor,
     rad: torch.Tensor,
     dim: Union[int, Tuple[int]],
     keepdim: bool=False,
     eps: float=1e-8
 ) -> torch.Tensor:
-    """Computes the projection of a point onto a ball given by the group \
-        l2-li norm. Here i in li stands for infinity.
-
-    Args:
-        X (torch.Tensor): Given point.
-        rad (torch.Tensor): Radius of the ball. rad.numel() must be 1.
-        dim (int | tuple[int]): dimensions along which l2-norm is computed.
-        keepdim (bool): whether to keep the reduced dimension or not.
-        eps (float): small value to ensure norms.l2(l2i_ball(x)) <= rad.
-
-    Returns:
-        torch.Tensor: projection onto the l2-li ball. Has same shape as X.
-    """
-    return X / torch.maximum(
-        torch.ones_like(rad), l2_in(X, dim, keepdim=keepdim) / rad + eps
+    return p / torch.maximum(
+        torch.ones_like(rad), l2_in(p, dim, keepdim=keepdim) / rad + eps
     )
-def l21_norm(
-    X: torch.Tensor,
+def l2_l1_norm(
+    p: torch.Tensor,
     scal: torch.Tensor,
     dim: Union[int, Tuple[int]],
-    keepdim: bool=False
-):
-    """Computes the prox of the group l2-l1 norm at a point, i.e.,
-                    prox           (X)
-                        scal*|.|
-                                2,1
-
-    Args:
-        X (torch.Tensor): Given point,.
-        scal (torch.Tensor): Scale of l2-l1 norm. scal.numel() must be 1,.
-        dim (int | tuple[int]): dimensions along which l2-norm is computed.
-        keepdim (bool): whether to keep the reduced dimension or not.
-
-    Returns:
-        _type_: prox of l2-l1 norm at a point. Has same shape as X.
-    """
-    return dual(l2i_ball, (X, scal, dim, keepdim))
-
-
-def loi_ball(
-    X: torch.Tensor,
-    r: torch.Tensor
+    keepdim: bool=False,
+    eps: float=1e-8
 ) -> torch.Tensor:
-    """Computes the projection of a point onto a ball given by the group \
-        lo-li norm. Here o and i in lo-li stand for operator and infinity \
-        respectively. Operator norm is computed along the last two dimensions.
+    return dual(l2_inf_ball, (p, scal, dim, keepdim, eps))
 
-    Args:
-        X (torch.Tensor): Given point.
-        r (torch.Tensor): Radius of the ball. r.numel() must be 1.
 
-    Returns:
-        torch.Tensor: projection onto the lo-li ball. Has same shape as X.
-    """
-    U, s, Vh = la.svd(X, full_matrices=False)
-    ps = torch.minimum(s, r)
+# %% Composite Matrix Norms
+
+def spec_inf_ball(p: torch.Tensor, rad: torch.Tensor) -> torch.Tensor:
+    U, s, Vh = la.svd(p, full_matrices=False)
+    ps = torch.minimum(s, rad)
     return U @ ps.diag_embed() @ Vh
-def ln1_norm(
-    X: torch.Tensor,
-    scal: torch.Tensor
-) -> torch.Tensor:
-    """Computes the prox of the group ln-l1 norm at a point, i.e.,
-                    prox           (X)
-                        scal*|.|
-                                n,1
-    Here n in ln stand for nuclear. Operator norm is computed along the last \
-        two dimensions.
+def nuc_l1_norm(p: torch.Tensor, scal: torch.Tensor) -> torch.Tensor:
+    return dual(spec_inf_ball, (p, scal))
 
-    Args:
-        X (torch.Tensor): Given point.
-        scal (torch.Tensor): Scale of ln-l1 norm. scal.numel() must be 1.
 
-    Returns:
-        torch.Tensor: prox of ln-l1 norm at a point. Has same shape as X.
-    """
-    return dual(loi_ball, (X, scal))
+# %% Docstring Bindings
+
+inf_ball.__doc__ = prox_doc("infinity", projection=True)
+l1_norm.__doc__ = prox_doc("l1")
+
+l2_ball.__doc__ = prox_doc("Euclidean", projection=True)
+l2_norm.__doc__ = prox_doc("Euclidean")
+
+spec_ball.__doc__ = prox_doc("spectral", projection=True)
+nuc_norm.__doc__ = prox_doc("nuclear")
+
+l2_inf_ball.__doc__ = prox_doc(
+    "composite Euclidean-infinity", projection=True
+)
+l2_l1_norm.__doc__ = prox_doc("composite Euclidean-l1")
+
+spec_inf_ball.__doc__ = prox_doc(
+    "composite spectral-infinity", projection=True,
+)
+nuc_l1_norm.__doc__ = prox_doc("composite nuclear-l1")
+
+
