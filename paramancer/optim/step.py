@@ -11,7 +11,7 @@ class MomentumType(Enum):
 
 class OptimizerStep(abc.ABC):
     def __init__(self):
-        self.residual = None
+        self.residual = None # TODO
     
     @abc.abstractmethod
     def step(self, x_curr: torch.Tensor) -> torch.Tensor: pass
