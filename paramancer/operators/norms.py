@@ -43,7 +43,7 @@ def inf(
     return p.abs().amax(dim=reduction_dims(p.ndim, batch))
 
 
-# %% Composite Norms
+# %% Composite Vector Norms
 
 def l2_in(
     p: torch.Tensor, dim: Union[int, Tuple[int]], keepdim: bool = False
@@ -55,8 +55,7 @@ def l2_l1(
     batch: Union[int, Tuple[int]] = -1
 ) -> torch.Tensor:
     q = l2_in(p, dim)
-    dim = reduction_dims(q.ndim, batch)
-    return q.sum(dim=dim)
+    return q.sum(dim=reduction_dims(q.ndim, batch))
 
 def l2_inf(
     p: torch.Tensor,
@@ -64,8 +63,10 @@ def l2_inf(
     batch: Union[int, Tuple[int]] = -1
 ) -> torch.Tensor:
     q = l2_in(p, dim)
-    dim = reduction_dims(q.ndim, batch)
-    return q.amax(dim=dim)
+    return q.amax(dim=reduction_dims(q.ndim, batch))
+
+
+# %% Composite Matrix Norms
 
 def nuc_in(p: torch.Tensor, keepdim: bool = False) -> torch.Tensor:
     return la.matrix_norm(p, ord='nuc', keepdim=keepdim)
@@ -83,6 +84,7 @@ def spec_inf(
     q = spec_in(p)
     return q.amax(dim=reduction_dims(q.ndim, batch))
 
+# %% Docstring Bindings
 
 inner_product.__doc__ = norm_doc("Euclidean dot product")
 l2_sq.__doc__ = norm_doc("squared Euclidean", squared=True)

@@ -29,8 +29,7 @@ def l2_norm(
 
 def spec_ball(p: torch.Tensor, rad: torch.Tensor) -> torch.Tensor:
     U, s, Vh = la.svd(p, full_matrices=False)
-    ps = torch.minimum(s, rad)
-    return U @ ps.diag() @ Vh
+    return U @ torch.minimum(s, rad).diag() @ Vh
 def nuc_norm(p: torch.Tensor, scal: torch.Tensor) -> torch.Tensor:
     return dual(spec_ball, (p, scal))
 
@@ -61,8 +60,7 @@ def l2_l1_norm(
 
 def spec_inf_ball(p: torch.Tensor, rad: torch.Tensor) -> torch.Tensor:
     U, s, Vh = la.svd(p, full_matrices=False)
-    ps = torch.minimum(s, rad)
-    return U @ ps.diag_embed() @ Vh
+    return U @ torch.minimum(s, rad).diag_embed() @ Vh
 def nuc_l1_norm(p: torch.Tensor, scal: torch.Tensor) -> torch.Tensor:
     return dual(spec_inf_ball, (p, scal))
 
