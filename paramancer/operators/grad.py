@@ -28,7 +28,7 @@ def gradient(smooth: Callable, *dargs: int) -> Callable:
         >>> w = lambda x, y, z: (x**2).sum() + (y*z).sum()
         >>> grad_xz = gradient(w, 0, 2)
         >>> x = torch.randn(3, requires_grad=True)
-        >>> y = torch.randn(5)
+        >>> y = torch.randn(5, requires_grad=True)
         >>> z = torch.randn(5)
         >>> gx, gz = grad_xz(x, y, z)
         >>> assert torch.allclose(gx, 2*x)
@@ -36,6 +36,7 @@ def gradient(smooth: Callable, *dargs: int) -> Callable:
         >>> (gx.sum() + gz.sum()).backward()
         >>> assert z.grad is None
         >>> assert torch.allclose(x.grad, 2*torch.ones(3))
+        >>> assert torch.allclose(y.grad, torch.ones(5))
     """
     def grad_s(*args):
         inps = [args[i] for i in dargs] if dargs else [args[0]]
