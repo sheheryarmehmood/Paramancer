@@ -43,5 +43,4 @@ def neumann_series(
     neumann = NeumannSeries(
         operator, vector, tol, iters, metric, store_history, verbose
     )
-    breakpoint()
     return neumann()

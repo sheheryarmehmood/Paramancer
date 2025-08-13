@@ -16,7 +16,7 @@ class ImplicitDifferentiation:
     ):
         self.step = algo_step
         self._xmin = self._u_given = self._xmin_grad = None
-        self._adjoint = None
+        self._adjoint_state = None
         self.tol = tol
         self.iters = iters
         self.metric = metric
@@ -42,17 +42,18 @@ class ImplicitDifferentiation:
         self._xmin_grad = xmin_grad
     
     def differentiate(self) -> Union[torch.Tensor, Tuple[torch.Tensor]]:
-        self._adjoint = neumann_series(
+        self._adjoint_state = neumann_series(
             operator=self.operator, vector=self._xmin_grad, tol=self.tol, 
             iters=self.iters, metric=self.metric, verbose=self.verbose
         )
+        # breakpoint()
         return agF.vjp(
-            lambda u: self.step(self._xmin, u), self._u_given, self._adjoint
+            lambda *u: self.step(self._xmin, u), self._u_given, self._adjoint_state
         )[1]
     
     @property
-    def adjoint(self):
-        return self._adjoint
+    def adjoint_state(self):
+        return self._adjoint_state
     
     def operator(self, y_curr):
         return agF.vjp(

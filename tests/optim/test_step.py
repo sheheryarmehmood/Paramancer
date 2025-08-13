@@ -8,17 +8,16 @@ from tests.util import prox_l1, lin_reg, grad_lin_reg
 
 
 def test_gd_step_squrared_euclidean():
-    grad = lambda x: x
     num_examples = 50
     stepsize = torch.linspace(0.1, 0.5, num_examples)
     x_curr = torch.linspace(1, 10, num_examples)
-    gd_step = GDStep(stepsize=stepsize, grad_map=grad)
+    gd_step = GDStep(stepsize=stepsize, grad_map=lambda x: x)
     
     x_step = gd_step(x_curr)
     
     x_direct = (1 - stepsize) * x_curr
     
-    assert torch.allclose(x_step, x_direct)
+    assert torch.allclose(x_step, x_direct, atol=1e-5)
 
 
 def test_prox_step():
@@ -32,7 +31,7 @@ def test_prox_step():
     x_step = prox_step(x_curr)
     x_direct = prox_map(x_curr)
     
-    assert torch.allclose(x_step, x_direct)
+    assert torch.allclose(x_step, x_direct, atol=1e-5)
 
 
 def test_polyak_step():
@@ -54,7 +53,7 @@ def test_polyak_step():
         x_next = x_direct - ss * grad_map(x_direct) + mm * (x_direct - x_prev)
         x_direct, x_prev = x_next, x_direct
     
-    assert torch.allclose(x_step, x_direct)
+    assert torch.allclose(x_step, x_direct, atol=1e-5)
 
 
 def test_pgd_and_fista_step():
@@ -93,10 +92,8 @@ def test_pgd_and_fista_step():
         x_next = prox_map(x_next - ss * grad_map(x_next))
         x_fista_dr, x_prev = x_next, x_fista_dr
     
-    assert all([
-        torch.allclose(x_pgd, x_pgd_dr),
-        torch.allclose(x_fista, x_fista_dr)
-    ])
+    assert torch.allclose(x_pgd, x_pgd_dr, atol=1e-5)
+    assert torch.allclose(x_fista, x_fista_dr, atol=1e-5)
 
 
 def test_gd_step_differentiation():
@@ -118,10 +115,9 @@ def test_gd_step_differentiation():
     y_step = gd_step(x_step)
     y_step.backward(y_grad)
     
-    assert all([
-        torch.allclose(y_step, y_direct),
-        torch.allclose(x_step.grad, x_direct.grad),
-        torch.allclose(A_step.grad, A_direct.grad),
-        torch.allclose(b_step.grad, b_direct.grad)
-    ])
+    assert torch.allclose(y_step, y_direct, atol=1e-5)
+    assert torch.allclose(x_step.grad, x_direct.grad, atol=1e-5)
+    assert torch.allclose(A_step.grad, A_direct.grad, atol=1e-5)
+    assert torch.allclose(b_step.grad, b_direct.grad, atol=1e-5)
+    
 

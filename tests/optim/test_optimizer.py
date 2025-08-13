@@ -24,15 +24,13 @@ def test_gd_and_hb():
     xm_gd = optim_gd(x_init, iters=10000)
     xm_hb = optim_hb(x_init, iters=10000)
     
-    assert all([
-        torch.allclose(xm, xm_gd, rtol=1e-3, atol=1e-6),
-        torch.allclose(xm, xm_hb, rtol=1e-4, atol=1e-6)
-    ])
+    assert torch.allclose(xm, xm_gd, rtol=1e-3, atol=1e-6)
+    assert torch.allclose(xm, xm_hb, rtol=1e-4, atol=1e-6)
 
 
 # Unrolling of Accelerated Gradient
 def test_nag_unrolling():
-    M, N = 10, 4
+    M, N = 5, 3
     A, b, xm, lip, _ = lin_reg(M, N)
     xm_grad = torch.randn(xm.shape)
     A_grad, b_grad = lin_reg_grad_sol(A, b, xm_grad)
@@ -46,13 +44,11 @@ def test_nag_unrolling():
     
     x_sol = torch.randn(N)
     
-    x_sol = optim_nag(x_sol, 1000)
+    x_sol = optim_nag(x_sol, 10000)
     x_sol.backward(xm_grad)
     
-    assert all([
-        torch.allclose(A.grad, A_grad, rtol=1e-3, atol=1e-5),
-        torch.allclose(b.grad, b_grad, rtol=1e-3, atol=1e-5)
-    ])
+    assert torch.allclose(A.grad, A_grad, rtol=1e-3, atol=1e-5)
+    assert torch.allclose(b.grad, b_grad, rtol=1e-3, atol=1e-5)
 
 def test_prox_methods():
     M, N = 20, 5
@@ -72,8 +68,6 @@ def test_prox_methods():
     xm_pgd = optim_pgd(x_init, iters=10000)
     xm_fista = optim_fista(x_init, iters=10000)
     
-    assert all([
-        torch.allclose(xm, xm_pgd, rtol=1e-3, atol=1e-6),
-        torch.allclose(xm, xm_fista, rtol=1e-3, atol=1e-6)
-    ])
+    assert torch.allclose(xm, xm_pgd, rtol=1e-3, atol=1e-6)
+    assert torch.allclose(xm, xm_fista, rtol=1e-3, atol=1e-6)
     

@@ -5,13 +5,16 @@ def dual(
     primal: Callable[..., Tensor],
     inps: Tuple[Any, ...]
 ):
-    """Given the prox of a function f, computes the prox of f*, i.e., the \
-        Fenchel conjugate of f, by using Moreau Identity.
+    """Computes the prox of the Fenchel conjugate of a function.
+    
+    Given the prox of a function f, it uses Moreau Identity to compute the
+    prox of f*, the Fenchel conjugate of f.
+        
 
     Args:
         primal (callable): A function to compute the prox of f.
-        inps (tuple): Input arguments of the prox of f* or f. Prox is \
-            computed w.r.t the first argument only. Rest are the parameters.
+        inps (tuple): Input arguments of the prox of f* or f. Prox is computed
+            w.r.t the first argument only. Rest are the parameters.
 
     Returns:
         prox of the dual of f at given input values.
@@ -22,11 +25,11 @@ def dual(
 def reduction_dims(
     ndim: int, batch: Union[int, Tuple[int]]
 ) -> Union[int, Tuple[int]]:
-    """Given a tensor of dimension ndim, suppose that we want to perform \
-        an operation along the dimension given by dim. Then the dimensions \
-        given by batch will be preserved. This method does the conversion \
-        from batch to dim (of course, we can also make the conversion in \
-        the reverse direction as well using the same method.) \
+    """Given a tensor of dimension ndim, suppose that we want to perform an
+    operation along the dimension given by dim. Then the dimensions given by
+    batch will be preserved. This method does the conversion from batch to dim.
+    We can also make the conversion in the reverse direction as well using the
+    same method.
 
     Args:
         ndim (int)

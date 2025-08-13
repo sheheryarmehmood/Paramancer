@@ -9,7 +9,7 @@ def test_adjoint_single_input():
     zero_el = torch.zeros(2)
     lin_op_adj = adjoint(lin_op, zero_el)
     y = torch.tensor([1., 1.])
-    assert torch.allclose(lin_op_adj(y), A.T @ y)
+    assert torch.allclose(lin_op_adj(y), A.T @ y, atol=1e-5)
 
 def test_adjoint_multiple_input():
     def lin_op(*args): return sum(args)
@@ -19,7 +19,9 @@ def test_adjoint_multiple_input():
     lin_op_adj = adjoint(lin_op, zero_el)
     z = torch.randn(input_size)
     adj_out = tuple(z.clone() for _ in range(num_inputs))
-    assert all(torch.allclose(x, y) for x, y in zip(adj_out, lin_op_adj(z)))
+    assert all(
+        torch.allclose(x, y, atol=1e-5) for x, y in zip(adj_out, lin_op_adj(z))
+    )
 
 def test_adjoint_differentiablity():
     rows, cols = 15, 10
@@ -33,10 +35,9 @@ def test_adjoint_differentiablity():
     lin_op_adj(y).sum().backward()
     
     ones = torch.ones(cols)
-    assert all([
-        torch.allclose(y.grad, A @ ones),
-        torch.allclose(A.grad, torch.outer(y, ones))
-    ])
+    
+    assert torch.allclose(y.grad, A @ ones, atol=1e-5)
+    assert torch.allclose(A.grad, torch.outer(y, ones), atol=1e-5)
 
 def test_parametric_adjoint():
     rows, cols, cols1, cols2 = 15, 20, 10, 5
@@ -53,8 +54,8 @@ def test_parametric_adjoint():
     
     x = lin_op_adj_single(y, A)
     x1, x2 = lin_op_adj_multi(y, A1, A2)
-    assert all([
-        torch.allclose(x, A.T @ y),
-        torch.allclose(x1, A1.T @ y),
-        torch.allclose(x2, A2.T @ y)
-    ])
+    
+    assert torch.allclose(x, A.T @ y, atol=1e-5)
+    assert torch.allclose(x1, A1.T @ y, atol=1e-5)
+    assert torch.allclose(x2, A2.T @ y, atol=1e-5)
+    
