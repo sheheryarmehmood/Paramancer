@@ -10,14 +10,26 @@ class MomentumType(Enum):
     Polyak = "Polyak"
 
 class OptimizerStep(abc.ABC):
-    def __init__(self):
-        self.residual = None # TODO
+    def __init__(self, tracker: bool=False):
+        self._residual_tracker = tracker
+        if self._residual_tracker:
+            self._residual = None
     
     @abc.abstractmethod
     def step(self, x_curr: torch.Tensor) -> torch.Tensor: pass
     
     def __call__(self, *args, **kwargs):
         return self.step(*args, **kwargs)
+    
+    @property
+    def residual(self):
+        if not hasattr(self, '_residual'):
+            raise RuntimeError(
+                "residual tracking is disabled for this step instance."
+            )
+        if self._residual is None:
+            raise AttributeError("`residual` must be set before referencing")
+        return self._residual
 
 class MomentumStep(OptimizerStep):
     def __init__(
@@ -26,7 +38,7 @@ class MomentumStep(OptimizerStep):
         strategy: MomentumType=MomentumType.Nesterov,
         momentum_scheduler: None | Callable=None
     ):
-        super().__init__()
+        super().__init__(tracker=False) # No tracking is needed.
         if not isinstance(strategy, MomentumType):
             raise TypeError(
                 "parameter strategy can only be either "
@@ -52,9 +64,10 @@ class GDStep(OptimizerStep):
         stepsize: torch.Tensor,
         grad_map: Callable,
         stepsize_scheduler: None | Callable=None,
-        linesearch=True
+        linesearch=True,
+        tracker: bool=False
     ):
-        super().__init__()
+        super().__init__(tracker=tracker)
         self.stepsize = stepsize
         self.grad_map = grad_map
         self.stepsize_scheduler = stepsize_scheduler
@@ -68,14 +81,17 @@ class GDStep(OptimizerStep):
             self.stepsize = self.stepsize_scheduler(x_curr, direction)
         else:
             self.stepsize = self.stepsize_scheduler()
-        return x_curr + self.stepsize * direction
+        x_new = x_curr + self.stepsize * direction
+        if self._residual_tracker:
+            self._residual = x_new - x_curr
+        return x_new
 
 class ProxStep(OptimizerStep):
     def __init__(
         self,
         prox_map: Callable
     ):
-        super().__init__()
+        super().__init__(tracker=False) # No tracking is needed.
         self.prox_map = prox_map
     
     def step(self, x_curr:torch.Tensor) -> torch.Tensor:
@@ -86,10 +102,11 @@ class PolyakStep(OptimizerStep):
         self,
         stepsize: torch.Tensor,
         momentum: torch.Tensor,
-        grad_map: Callable
+        grad_map: Callable,
+        tracker: bool=False
     ):
-        super().__init__()
-        self.gd_step = GDStep(stepsize, grad_map)
+        super().__init__(tracker=False) # Uses the tracking of its GDStep
+        self.gd_step = GDStep(stepsize, grad_map, tracker=tracker)
         self.mm_step = MomentumStep(momentum, strategy=MomentumType.Polyak)
         self.x_prev = None
     
@@ -99,18 +116,23 @@ class PolyakStep(OptimizerStep):
             x_new = x_new + self.mm_step(x_curr, self.x_prev)
         self.x_prev = x_curr
         return x_new
+    
+    @property
+    def residual(self):
+        return self.gd_step.residual
 
 class NesterovStep(OptimizerStep):
     def __init__(
         self,
         stepsize: torch.Tensor,
         grad_map: Callable,
-        momentum_scheduler: None | Callable=None
+        momentum_scheduler: None | Callable=None,
+        tracker: bool=False
     ):
-        super().__init__()
+        super().__init__(tracker=False) # Uses the tracking of its GDStep
         if momentum_scheduler is None:
             momentum_scheduler = MomentumScheduler()
-        self.gd_step = GDStep(stepsize, grad_map)
+        self.gd_step = GDStep(stepsize, grad_map, tracker=tracker)
         self.mm_step = MomentumStep(
             momentum=None, momentum_scheduler=momentum_scheduler
         )
@@ -122,20 +144,28 @@ class NesterovStep(OptimizerStep):
         x_new = self.gd_step(self.mm_step(x_curr, self.x_prev))
         self.x_prev = x_curr
         return x_new
+    
+    @property
+    def residual(self):
+        return self.gd_step.residual
 
 class ProxGradStep(OptimizerStep):
     def __init__(
         self,
         stepsize: torch.Tensor,
         grad_map: Callable,
-        prox_map: Callable
+        prox_map: Callable,
+        tracker: bool=False
     ):
-        super().__init__()
-        self.gd_step = GDStep(stepsize, grad_map)
+        super().__init__(tracker=tracker)
+        self.gd_step = GDStep(stepsize, grad_map, tracker=False)
         self.prox_step = ProxStep(prox_map)
     
     def step(self, x_curr):
-        return self.prox_step(self.gd_step(x_curr))
+        x_new = self.prox_step(self.gd_step(x_curr))
+        if self._residual_tracker:
+            self._residual = x_new - x_curr
+        return x_new
 
 class FISTAStep(OptimizerStep):
     def __init__(
@@ -143,18 +173,30 @@ class FISTAStep(OptimizerStep):
         stepsize: torch.Tensor,
         grad_map: Callable,
         prox_map: Callable,
-        momentum_scheduler: None | Callable=None
+        momentum_scheduler: None | Callable=None,
+        tracker: bool=False
     ):
-        super().__init__()
+        super().__init__(tracker=False) # Uses the tracking of its ProxGradStep
         if momentum_scheduler is None:
             momentum_scheduler = MomentumScheduler()
-        self.nag_step = NesterovStep(
-            stepsize, grad_map=grad_map, momentum_scheduler=momentum_scheduler
+        self.pgd_step = ProxGradStep(
+            stepsize, grad_map, prox_map, tracker=tracker
         )
-        self.prox_step = ProxStep(prox_map)
+        self.mm_step = MomentumStep(
+            momentum=None, momentum_scheduler=momentum_scheduler
+        )
+        self.x_prev = None
     
     def step(self, x_curr):
-        return self.prox_step(self.nag_step(x_curr))
+        if self.x_prev is None:
+            self.x_prev = x_curr
+        x_new = self.pgd_step(self.mm_step(x_curr, self.x_prev))
+        self.x_prev = x_curr
+        return x_new
+    
+    @property
+    def residual(self):
+        return self.pgd_step.residual
 
 
 class PDHGPartialStep(OptimizerStep):
@@ -162,8 +204,10 @@ class PDHGPartialStep(OptimizerStep):
         self,
         stepsize: torch.Tensor,
         lin_op: Callable,
-        prox_map: Callable
+        prox_map: Callable,
+        tracker: bool=False
     ):
+        super().__init__(tracker=tracker)
         self.stepsize = stepsize
         self.lin_op = lin_op
         self.prox_step = ProxStep(prox_map)
@@ -184,9 +228,10 @@ class PDHGStep(OptimizerStep):
         prox_map_primal: Callable,
         prox_map_dual: Callable,
         lin_op: Callable,
-        lin_op_adj: Callable = None
+        lin_op_adj: Callable=None,
+        tracker: bool=False
     ):
-        super().__init__()
+        super().__init__(tracker)
         if lin_op_adj is None:
             lin_op_adj = ... # TODO
         self.primal_step = PDHGPartialStep(
