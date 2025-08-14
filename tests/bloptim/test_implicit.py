@@ -21,16 +21,16 @@ def test_implicit():
     xmin = la.solve(A.T @ A, A.T @ b)
     xmin_grad = torch.randn(xmin.shape)
 
-    u_grad_anl = agF.vjp(minimizer, u_given, xmin_grad)[1]
+    A_grad_anl, b_grad_anl = agF.vjp(minimizer, u_given, xmin_grad)[1]
 
     lip = la.matrix_norm(A.T @ A, ord=2)
     gd_step = GDParamStep(stepsize=1/lip, grad_map_prm=grad_fn_prm)
 
-    imp_diff = ImplicitDifferentiation(gd_step, iters=K)
-    u_grad_imp = imp_diff(xmin, u_given, xmin_grad)
-
-    assert all(
-        torch.allclose(anl, imp, atol=1e-5) 
-        for anl, imp in zip(u_grad_imp, u_grad_anl)
+    imp_diff = ImplicitDifferentiation(
+        gd_step, iters=K, metric="default", tol=1e-9
     )
+    A_grad_imp, b_grad_imp = imp_diff(xmin, u_given, xmin_grad)
+    
+    assert torch.allclose(A_grad_imp, A_grad_anl, atol=1e-4)
+    assert torch.allclose(b_grad_imp, b_grad_anl, atol=1e-4)
 

@@ -11,7 +11,9 @@ def test_neumann_nxn():
     vector = torch.randn(N, P).squeeze()
     
     true_sol = la.solve(torch.eye(N) - matrix, vector)
-    neu_sol = neumann_series(lambda x: matrix @ x, vector, iters=K)
+    neu_sol = neumann_series(
+        lambda x: matrix @ x, vector, iters=K, metric="default", tol=1e-9
+    )
     
     assert torch.allclose(true_sol, neu_sol, atol=1e-5)
 

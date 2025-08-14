@@ -11,7 +11,7 @@ class ImplicitDifferentiation:
         algo_step: OptimizerStep,
         tol: float=1e-5,
         iters: int=100,
-        metric: None | Callable=None,
+        metric: None | str | Callable=None,
         verbose: bool=False
     ):
         self.step = algo_step

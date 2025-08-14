@@ -1,21 +1,25 @@
 import torch
+import torch.autograd.functional as agF
 import torch.linalg as la
 import pytest
 from paramancer.optim import GradientDescent, HeavyBall, AcceleratedGradient
 from paramancer.optim import ProximalGradient, FISTA
-from tests.util import grad_lin_reg, lin_reg, lin_reg_grad_sol, prox_sq_l2
 
 
 # Testing Gradient Descent and Heavy-ball
 def test_gd_and_hb():
-    M, N = 1000, 10
-    A, b, xm, lip, mu = lin_reg(M, N)
+    M, N = 10, 5
+    A, b = torch.rand(M, N), torch.randn(M)
+    lip = torch.linalg.norm(A.T @ A, ord=2)
+    mu = torch.linalg.norm(A.T @ A, ord=-2)
+    xm = la.solve(A.T @ A, A.T @ b)
+    
     ss_gd = 2 / (lip + mu)
     sql, sqm = lip.sqrt(), mu.sqrt()
     ss_hb = (2 / (sql + sqm)) ** 2
     mm = ((sql - sqm) / (sql + sqm)) ** 2
     
-    grad_map = grad_lin_reg(A, b)
+    def grad_map(x): return A.T @ (A @ x - b)
     
     optim_gd = GradientDescent(ss_gd, grad_map)
     optim_hb = HeavyBall(ss_hb, mm, grad_map)
@@ -31,15 +35,19 @@ def test_gd_and_hb():
 # Unrolling of Accelerated Gradient
 def test_nag_unrolling():
     M, N = 5, 3
-    A, b, xm, lip, _ = lin_reg(M, N)
-    xm_grad = torch.randn(xm.shape)
-    A_grad, b_grad = lin_reg_grad_sol(A, b, xm_grad)
+    A, b = torch.rand(M, N), torch.randn(M)
+    lip = torch.linalg.norm(A.T @ A, ord=2)
+    xm_grad = torch.randn(N)
+    
+    A_grad, b_grad = agF.vjp(
+        lambda A, b: la.solve(A.T @ A, A.T @ b), (A, b), xm_grad
+    )[1]
     
     ss = 1 / lip
     
     A = A.detach().clone().requires_grad_()
     b = b.detach().clone().requires_grad_()
-    grad_map = grad_lin_reg(A, b)
+    def grad_map(x): return A.T @ (A @ x - b)
     optim_nag = AcceleratedGradient(ss, grad_map)
     
     x_sol = torch.randn(N)
@@ -52,14 +60,15 @@ def test_nag_unrolling():
 
 def test_prox_methods():
     M, N = 20, 5
-    A, b, _, lip, _ = lin_reg(M, N)
+    A, b = torch.rand(M, N), torch.randn(M)
+    lip = torch.linalg.norm(A.T @ A, ord=2)
     reg = torch.rand(1)
     xm = la.solve(A.T @ A + reg * torch.eye(N), A.T @ b)
     
     ss = 1 / lip
     
-    grad_map = grad_lin_reg(A, b)
-    prox_map = prox_sq_l2(reg * ss)
+    def grad_map(x): return A.T @ (A @ x - b)
+    def prox_map(x): return x / (1 + reg * ss)
     
     optim_pgd = ProximalGradient(ss, grad_map, prox_map)
     optim_fista = FISTA(ss, grad_map, prox_map)
@@ -70,4 +79,41 @@ def test_prox_methods():
     
     assert torch.allclose(xm, xm_pgd, rtol=1e-3, atol=1e-6)
     assert torch.allclose(xm, xm_fista, rtol=1e-3, atol=1e-6)
+
+
+def test_hb_with_default_metric():
+    M, N = 10, 5
+    A, b = torch.rand(M, N), torch.randn(M)
+    lip = torch.linalg.norm(A.T @ A, ord=2)
+    mu = torch.linalg.norm(A.T @ A, ord=-2)
+    
+    sql, sqm = lip.sqrt(), mu.sqrt()
+    ss = (2 / (sql + sqm)) ** 2
+    mm = ((sql - sqm) / (sql + sqm)) ** 2
+    
+    def grad_map(x): return A.T @ (A @ x - b)
+    
+    heavy_ball = HeavyBall(ss, mm, grad_map, metric="default")
+    
+    _ = heavy_ball(torch.randn(N), iters=10000)
+    
+    # For that many iterations, the algorithm should converge
+    assert heavy_ball.result.converged
+
+
+def test_nag_with_default_metric():
+    M, N = 10, 5
+    A, b = torch.rand(M, N), torch.randn(M)
+    lip = torch.linalg.norm(A.T @ A, ord=2)
+    ss = 1 / lip
+    
+    def grad_map(x): return A.T @ (A @ x - b)
+    
+    nag_optim = AcceleratedGradient(ss, grad_map, metric=grad_map)
+    
+    _ = nag_optim(torch.randn(N), iters=10000)
+    
+    # For that many iterations, the algorithm should converge
+    assert nag_optim.result.converged
+    
     

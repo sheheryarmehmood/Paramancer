@@ -6,7 +6,7 @@ from .step import OptimizerStep
 from .step import GDStep, PolyakStep, NesterovStep
 from .step import ProxGradStep, FISTAStep
 from .scheduler import MomentumScheduler
-from .util import OptimizationResult
+from .util import OptimizationResult, default_metric
 
 
 class Optimizer:
@@ -53,10 +53,13 @@ class Optimizer:
             if self.store_history:
                 self.history.append(x_curr.clone())
             
-            if not self.metric:
+            if not self.metric and not self.step.residual_tracking:
                 continue
             
-            metric_val = self.metric(x_curr)
+            if self.step.residual_tracking:
+                metric_val = default_metric(self.step.residual)
+            else:
+                metric_val = self.metric(x_curr)
 
             if self.verbose:
                 pbar.set_description(f"{metric_val:.6e}")
@@ -82,11 +85,12 @@ class GradientDescent(Optimizer):
         grad_map: Callable,
         tol: float=1e-5,
         iters: int=100,
-        metric: None | Callable=None,
+        metric: None | str | Callable=None,
         store_history: bool=False,
         verbose: bool=False
     ):
-        step = GDStep(stepsize, grad_map)
+        tracking = metric == "default"
+        step = GDStep(stepsize, grad_map, residual_tracking=tracking)
         super().__init__(step, tol, iters, metric, store_history, verbose)
 
 
@@ -98,11 +102,14 @@ class HeavyBall(Optimizer):
         grad_map: Callable,
         tol: float=1e-5,
         iters: int=100,
-        metric: None | Callable=None,
+        metric: None | str | Callable=None,
         store_history: bool=False,
         verbose: bool=False
     ):
-        step = PolyakStep(stepsize, momentum, grad_map)
+        tracking = metric == "default"
+        step = PolyakStep(
+            stepsize, momentum, grad_map, residual_tracking=tracking
+        )
         super().__init__(step, tol, iters, metric, store_history, verbose)
 
 class AcceleratedGradient(Optimizer):
@@ -113,13 +120,17 @@ class AcceleratedGradient(Optimizer):
         momentum_scheduler: None | Callable=None,
         tol: float=1e-5,
         iters: int=100,
-        metric: None | Callable=None,
+        metric: None | str | Callable=None,
         store_history = False,
         verbose = False
     ):
         if momentum_scheduler is None:
             momentum_scheduler = MomentumScheduler()
-        step = NesterovStep(stepsize, grad_map, momentum_scheduler)
+        tracking = metric == "default"
+        step = NesterovStep(
+            stepsize, grad_map, momentum_scheduler=momentum_scheduler,
+            residual_tracking=tracking
+        )
         super().__init__(step, tol, iters, metric, store_history, verbose)
     
     def restart(self):
@@ -134,11 +145,14 @@ class ProximalGradient(Optimizer):
         prox_map: Callable,
         tol: float=1e-5,
         iters: int=100,
-        metric: None | Callable=None,
+        metric: None | str | Callable=None,
         store_history = False,
         verbose = False
     ):
-        step = ProxGradStep(stepsize, grad_map, prox_map)
+        tracking = metric == "default"
+        step = ProxGradStep(
+            stepsize, grad_map, prox_map, residual_tracking=tracking
+        )
         super().__init__(step, tol, iters, metric, store_history, verbose)
 
 
@@ -151,14 +165,16 @@ class FISTA(Optimizer):
         momentum_scheduler: None | Callable=None,
         tol: float=1e-5,
         iters: int=100,
-        metric: None | Callable=None,
+        metric: None | str | Callable=None,
         store_history = False,
         verbose = False
     ):
         if momentum_scheduler is None:
             momentum_scheduler = MomentumScheduler()
+        tracking = metric == "default"
         step = FISTAStep(
-            stepsize, grad_map, prox_map, momentum_scheduler
+            stepsize, grad_map, prox_map, momentum_scheduler,
+            residual_tracking=tracking
         )
         super().__init__(step, tol, iters, metric, store_history, verbose)
     
