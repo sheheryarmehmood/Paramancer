@@ -176,7 +176,7 @@ def test_fista_residual_value():
     x3 = prox_fn(y3 - ss * grad_fn(y3))
     res3 = x3 - y3
     
-    fista_step = FISTAStep(ss, grad_fn, prox_fn, residual_tracking=True)
+    fista_step = FISTAStep(ss, grad_fn, prox_fn, tracking=True)
     x_curr = x0
     
     # Iter 1
@@ -198,7 +198,7 @@ def test_fista_residual_attribute_duplication():
     ss = 0.01
     reg = 0.5
     
-    fista_step = FISTAStep(ss, grad_fn, prox_fn, residual_tracking=True)
+    fista_step = FISTAStep(ss, grad_fn, prox_fn, tracking=True)
     _ = fista_step(fista_step(fista_step(torch.tensor(10.))))
     
     # FISTAStep residual must come from its ProxGradStep.

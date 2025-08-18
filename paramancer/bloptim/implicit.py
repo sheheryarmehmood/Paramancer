@@ -46,7 +46,6 @@ class ImplicitDifferentiation:
             operator=self.operator, vector=self._xmin_grad, tol=self.tol, 
             iters=self.iters, metric=self.metric, verbose=self.verbose
         )
-        # breakpoint()
         return agF.vjp(
             lambda *u: self.step(self._xmin, u), self._u_given, self._adjoint_state
         )[1]

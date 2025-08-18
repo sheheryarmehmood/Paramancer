@@ -10,7 +10,7 @@ class AffineStep(OptimizerStep):
         vector: torch.Tensor,
         residual_tracking: bool=False
     ):
-        super().__init__(residual_tracking=residual_tracking)
+        super().__init__(tracking=residual_tracking)
         self.operator = operator
         self.vector = vector
     

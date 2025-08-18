@@ -90,7 +90,7 @@ class GradientDescent(Optimizer):
         verbose: bool=False
     ):
         tracking = metric == "default"
-        step = GDStep(stepsize, grad_map, residual_tracking=tracking)
+        step = GDStep(stepsize, grad_map, tracking=tracking)
         super().__init__(step, tol, iters, metric, store_history, verbose)
 
 
@@ -108,7 +108,7 @@ class HeavyBall(Optimizer):
     ):
         tracking = metric == "default"
         step = PolyakStep(
-            stepsize, momentum, grad_map, residual_tracking=tracking
+            stepsize, momentum, grad_map, tracking=tracking
         )
         super().__init__(step, tol, iters, metric, store_history, verbose)
 
@@ -129,7 +129,7 @@ class AcceleratedGradient(Optimizer):
         tracking = metric == "default"
         step = NesterovStep(
             stepsize, grad_map, momentum_scheduler=momentum_scheduler,
-            residual_tracking=tracking
+            tracking=tracking
         )
         super().__init__(step, tol, iters, metric, store_history, verbose)
     
@@ -151,7 +151,7 @@ class ProximalGradient(Optimizer):
     ):
         tracking = metric == "default"
         step = ProxGradStep(
-            stepsize, grad_map, prox_map, residual_tracking=tracking
+            stepsize, grad_map, prox_map, tracking=tracking
         )
         super().__init__(step, tol, iters, metric, store_history, verbose)
 
@@ -174,7 +174,7 @@ class FISTA(Optimizer):
         tracking = metric == "default"
         step = FISTAStep(
             stepsize, grad_map, prox_map, momentum_scheduler,
-            residual_tracking=tracking
+            tracking=tracking
         )
         super().__init__(step, tol, iters, metric, store_history, verbose)
     
