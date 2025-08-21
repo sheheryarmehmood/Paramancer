@@ -8,7 +8,6 @@ from .step import ProxGradStep, FISTAStep
 from .scheduler import MomentumScheduler
 from .util import OptimizationResult, default_metric
 
-
 class Optimizer:
     def __init__(
         self,
@@ -36,9 +35,9 @@ class Optimizer:
     def run(
         self, x_init: torch.Tensor, iters: None | int=None
     ) -> torch.Tensor:
-        x_curr = x_init.clone()
+        x_curr = x_init.clone()                     # torch.Tensor Operation
         if self.store_history:
-            self.history.append(x_curr.clone())
+            self.history.append(x_curr.clone())     # torch.Tensor Operation
         
         if iters is not None:
             self.iters = iters
@@ -51,12 +50,13 @@ class Optimizer:
             x_curr = self.step(x_curr)
             
             if self.store_history:
-                self.history.append(x_curr.clone())
+                self.history.append(x_curr.clone()) # torch.Tensor Operation
             
             if not self.metric and not self.step.residual_tracking:
                 continue
             
             if self.step.residual_tracking:
+                # vvvvv torch.Tensor Operation vvvvv
                 metric_val = default_metric(self.step.residual)
             else:
                 metric_val = self.metric(x_curr)
@@ -124,8 +124,6 @@ class AcceleratedGradient(Optimizer):
         store_history = False,
         verbose = False
     ):
-        if momentum_scheduler is None:
-            momentum_scheduler = MomentumScheduler()
         tracking = metric == "default"
         step = NesterovStep(
             stepsize, grad_map, momentum_scheduler=momentum_scheduler,
@@ -169,12 +167,10 @@ class FISTA(Optimizer):
         store_history = False,
         verbose = False
     ):
-        if momentum_scheduler is None:
-            momentum_scheduler = MomentumScheduler()
         tracking = metric == "default"
         step = FISTAStep(
-            stepsize, grad_map, prox_map, momentum_scheduler,
-            tracking=tracking
+            stepsize, grad_map, prox_map, tracking=tracking,
+            momentum_scheduler=momentum_scheduler
         )
         super().__init__(step, tol, iters, metric, store_history, verbose)
     

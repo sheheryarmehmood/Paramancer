@@ -2,8 +2,9 @@ import torch
 import pytest
 import torch.nn.functional as nnF
 
-from paramancer.optim.step import GDStep, PolyakStep
-from paramancer.optim.step import ProxStep, ProxGradStep, FISTAStep
+from paramancer.optim.step import ProxStep, GDStep, MomentumStep
+from paramancer.optim.step import PolyakStep, NesterovStep
+from paramancer.optim.step import ProxGradStep, FISTAStep
 
 
 def test_gd_step_squrared_euclidean():
@@ -255,6 +256,25 @@ def test_fista_residual_attribute_duplication():
         "fista_step.pgd_step.prox_step.residual exists!", attr=False
     )
     
+def test_markovian_property():
+    def grad_map(x): x
+    def prox_map(x): x
     
+    ss = torch.tensor(0.1)
+    mm = torch.tensor(0.1)
     
+    mm_step = MomentumStep(mm)
+    gd_step = GDStep(ss, grad_map)
+    prox_step = ProxStep(prox_map)
+    hb_step = PolyakStep(ss, mm, grad_map)
+    nag_step = NesterovStep(ss, grad_map)
+    pgd_step = ProxGradStep(ss, grad_map, prox_map)
+    fista_step = FISTAStep(ss, grad_map, prox_map)
     
+    assert not mm_step.is_markovian()
+    assert gd_step.is_markovian()
+    assert prox_step.is_markovian()
+    assert not hb_step.is_markovian()
+    assert not nag_step.is_markovian()
+    assert pgd_step.is_markovian()
+    assert not fista_step.is_markovian()

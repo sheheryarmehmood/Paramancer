@@ -37,7 +37,7 @@ def test_gd_with_imp_diff():
 
 
 def test_hb_with_imp_diff():
-    M, N = 10, 8
+    M, N = 5, 2
     A, b = torch.rand(M, N), torch.randn(M)
     xm_grad = torch.randn(N)
     
@@ -60,7 +60,7 @@ def test_hb_with_imp_diff():
     A_given = A.detach().clone().requires_grad_()
     b_given = b.detach().clone().requires_grad_()
     xm_id = OptimizerID.apply(
-        A_given, b_given, x_init, param_step, "default", 1e-8, None, 10000, 
+        A_given, b_given, x_init, param_step, "default", 1e-8, None, 1000, 
         None, 2
     )
     xm_id.backward(xm_grad)

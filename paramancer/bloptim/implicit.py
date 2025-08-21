@@ -11,7 +11,7 @@ class ImplicitDifferentiation:
         algo_step: OptimizerStep,
         tol: float=1e-5,
         iters: int=100,
-        metric: None | str | Callable=None,
+        metric: Union[None, str, Callable]=None,
         verbose: bool=False
     ):
         self.step = algo_step
@@ -29,7 +29,12 @@ class ImplicitDifferentiation:
         xmin_grad: torch.Tensor
     ) -> Union[torch.Tensor, Tuple[torch.Tensor]]:
         self.setup(xmin, u_given, xmin_grad)
-        return self.differentiate()
+        self.solve_linear_system()
+        return self.compute_derivative_from_adjoint_state()
+    
+    @property
+    def adjoint_state(self):
+        return self._adjoint_state
     
     def setup(
         self,
@@ -41,22 +46,50 @@ class ImplicitDifferentiation:
         self._u_given = u_given
         self._xmin_grad = xmin_grad
     
-    def differentiate(self) -> Union[torch.Tensor, Tuple[torch.Tensor]]:
+    def solve_linear_system(self):
+        if self.step.is_markovian():
+            operator = self._operator_markovian
+            vector = self._xmin_grad
+        else:
+            operator = self._operator_non_markovian
+            vector = self._xmin_grad, self._xmin_grad
         self._adjoint_state = neumann_series(
-            operator=self.operator, vector=self._xmin_grad, tol=self.tol, 
-            iters=self.iters, metric=self.metric, verbose=self.verbose
+            operator=operator, vector=vector, tol=self.tol, iters=self.iters, 
+            metric=self.metric, verbose=self.verbose
         )
+    
+    def compute_derivative_from_adjoint_state(self):
+        # -> Union[torch.Tensor, Tuple[torch.Tensor]]
+        if self.step.is_markovian():
+            func = self._markovian_u
+        else:
+            func = self._non_markovian_u
         return agF.vjp(
-            lambda *u: self.step(self._xmin, u), self._u_given, self._adjoint_state
+            func, self._u_given, self.adjoint_state
         )[1]
     
-    @property
-    def adjoint_state(self):
-        return self._adjoint_state
+    def _operator_markovian(self, yc):
+        return agF.vjp(self._markovian_x, self._xmin, yc)[1]
     
-    def operator(self, y_curr):
+    def _operator_non_markovian(self, yc, yp):
         return agF.vjp(
-            lambda x: self.step(x, self._u_given), self._xmin, y_curr
+            self._non_markovian_x, (self._xmin, self._xmin), (yc, yp)
         )[1]
+    
+    def _markovian_x(self, x_curr):
+        return self.step(x_curr, self._u_given)
+    
+    def _non_markovian_x(self, x_curr, x_prev):
+        self.step.x_prev = x_prev
+        return self.step(x_curr, self._u_given), x_curr
+    
+    def _markovian_u(self, *u_given):
+        if len(u_given) == 1:
+            u_given = u_given[0]
+        return self.step(self._xmin, u_given)
+    
+    def _non_markovian_u(self, *u_given):
+        self.step.x_prev = self._xmin
+        return self._markovian_u(*u_given), self._xmin
 
 

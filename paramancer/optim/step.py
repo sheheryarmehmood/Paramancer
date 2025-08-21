@@ -34,6 +34,9 @@ class OptimizerStep(abc.ABC):
     @property
     def residual_tracking(self):
         return self._residual_tracking
+    
+    def is_markovian(self):
+        return not hasattr(self, "_x_prev")
 
 class MomentumStep(OptimizerStep):
     def __init__(
@@ -57,10 +60,13 @@ class MomentumStep(OptimizerStep):
     ) -> torch.Tensor:
         if self.momentum_scheduler:
             self.momentum = self.momentum_scheduler()
-        x_new = self.momentum * (x_curr - x_prev)
+        x_new = self.momentum * (x_curr - x_prev)   # torch.Tensor Operation
         if self.strategy == MomentumType.Nesterov:
-            x_new = x_curr + x_new
+            x_new = x_curr + x_new                  # torch.Tensor Operation
         return x_new
+    
+    def is_markovian(self):
+        return False
 
 class GDStep(OptimizerStep):
     def __init__(
@@ -80,9 +86,9 @@ class GDStep(OptimizerStep):
     def step(self, x_curr: torch.Tensor) -> torch.Tensor:
         direction = -self.grad_map(x_curr)
         self._set_stepsize(x_curr, direction)
-        x_new = x_curr + self.stepsize * direction
+        x_new = x_curr + self.stepsize * direction  # torch.Tensor Operation
         if self._residual_tracking:
-            self._residual = x_new - x_curr
+            self._residual = x_new - x_curr         # torch.Tensor Operation
         return x_new
     
     def _set_stepsize(self, x_curr, direction):
@@ -117,13 +123,14 @@ class PolyakStep(OptimizerStep):
             stepsize, grad_map, tracking=tracking
         )
         self.mm_step = MomentumStep(momentum, strategy=MomentumType.Polyak)
-        self.x_prev = None
+        self._x_prev = None
     
     def step(self, x_curr):
         x_new = self.gd_step(x_curr)
-        if self.x_prev is not None:
-            x_new = x_new + self.mm_step(x_curr, self.x_prev)
-        self.x_prev = x_curr
+        if self._x_prev is not None:
+            # vvvvv torch.Tensor Operation vvvvv
+            x_new = x_new + self.mm_step(x_curr, self._x_prev)
+        self._x_prev = x_curr
         return x_new
     
     @property
@@ -133,6 +140,16 @@ class PolyakStep(OptimizerStep):
     @property
     def residual_tracking(self):
         return self.gd_step.residual_tracking
+    
+    @property
+    def x_prev(self):
+        if self._x_prev is None:
+            raise RuntimeError("`x_prev` accessed before assignment.")
+        return self._x_prev
+    
+    @x_prev.setter
+    def x_prev(self, x):
+        self._x_prev = x
 
 class NesterovStep(OptimizerStep):
     def __init__(
@@ -151,13 +168,15 @@ class NesterovStep(OptimizerStep):
         self.mm_step = MomentumStep(
             momentum=None, momentum_scheduler=momentum_scheduler
         )
-        self.x_prev = None
+        self._x_prev = None
     
     def step(self, x_curr):
-        if self.x_prev is None:
-            self.x_prev = x_curr
-        x_new = self.gd_step(self.mm_step(x_curr, self.x_prev))
-        self.x_prev = x_curr
+        if self._x_prev is None:
+            x_mm = x_curr
+        else:
+            x_mm = self.mm_step(x_curr, self._x_prev)
+        x_new = self.gd_step(x_mm)
+        self._x_prev = x_curr
         return x_new
     
     @property
@@ -167,6 +186,16 @@ class NesterovStep(OptimizerStep):
     @property
     def residual_tracking(self):
         return self.gd_step.residual_tracking
+    
+    @property
+    def x_prev(self):
+        if self._x_prev is None:
+            raise RuntimeError("`x_prev` accessed before assignment.")
+        return self._x_prev
+    
+    @x_prev.setter
+    def x_prev(self, x):
+        self._x_prev = x
 
 class ProxGradStep(OptimizerStep):
     def __init__(
@@ -183,7 +212,7 @@ class ProxGradStep(OptimizerStep):
     def step(self, x_curr):
         x_new = self.prox_step(self.gd_step(x_curr))
         if self._residual_tracking:
-            self._residual = x_new - x_curr
+            self._residual = x_new - x_curr         # torch.Tensor Operation
         return x_new
 
 class FISTAStep(OptimizerStep):
@@ -204,13 +233,13 @@ class FISTAStep(OptimizerStep):
         self.mm_step = MomentumStep(
             momentum=None, momentum_scheduler=momentum_scheduler
         )
-        self.x_prev = None
+        self._x_prev = None
     
     def step(self, x_curr):
-        if self.x_prev is None:
-            self.x_prev = x_curr
-        x_new = self.pgd_step(self.mm_step(x_curr, self.x_prev))
-        self.x_prev = x_curr
+        if self._x_prev is None:
+            self._x_prev = x_curr
+        x_new = self.pgd_step(self.mm_step(x_curr, self._x_prev))
+        self._x_prev = x_curr
         return x_new
     
     @property
@@ -220,6 +249,16 @@ class FISTAStep(OptimizerStep):
     @property
     def residual_tracking(self):
         return self.pgd_step.residual_tracking
+    
+    @property
+    def x_prev(self):
+        if self._x_prev is None:
+            raise RuntimeError("`x_prev` accessed before assignment.")
+        return self._x_prev
+    
+    @x_prev.setter
+    def x_prev(self, x):
+        self._x_prev = x
 
 
 class PDHGPartialStep(OptimizerStep):
@@ -238,6 +277,7 @@ class PDHGPartialStep(OptimizerStep):
     def step(
         self, inp_curr: torch.Tensor, oth_curr: torch.Tensor
     ) -> torch.Tensor:
+        # vvvvv torch.Tensor Operation vvvvv
         return self.prox_step(
             inp_curr - self.stepsize * self.lin_op(oth_curr)
         )
@@ -268,6 +308,7 @@ class PDHGStep(OptimizerStep):
         self, x_primal_curr: torch.Tensor, x_dual_curr: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
         x_primal_next = self.primal_step(x_primal_curr, x_dual_curr)
+        # vvvvv torch.Tensor Operation vvvvv
         x_primal_curr = 2 * x_primal_next - x_primal_curr
         x_dual_next = self.dual_step(x_dual_curr, -x_primal_curr)
         return x_primal_next, x_dual_next

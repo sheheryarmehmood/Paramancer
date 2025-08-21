@@ -38,7 +38,7 @@ class NeumannSeries(Optimizer):
     def __call__(
         self, iters: None | int=None
     ) -> torch.Tensor:
-        return self.run(0 * self.step.vector, iters)
+        return self.run(torch.zeros_like(self.step.vector), iters)
 
 
 def neumann_series(

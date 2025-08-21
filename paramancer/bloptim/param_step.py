@@ -1,5 +1,5 @@
 import torch
-from typing import Callable
+from typing import Callable, Union, Tuple
 from paramancer.optim.step import GDStep, PolyakStep, NesterovStep
 from paramancer.optim.step import ProxGradStep, FISTAStep
 from paramancer.optim.scheduler import MomentumScheduler
@@ -15,7 +15,7 @@ class SmoothParamStepMixin:
     def step(
         self,
         x_curr: torch.Tensor,
-        u_given: None | torch.Tensor | tuple[torch.Tensor]=None
+        u_given: Union[None, torch.Tensor, Tuple[torch.Tensor]]=None
     ) -> torch.Tensor:
         self.u_given = u_given
         return super().step(x_curr)
@@ -23,7 +23,7 @@ class SmoothParamStepMixin:
     def __call__(
         self,
         x_curr: torch.Tensor,
-        u_given: None | torch.Tensor | tuple[torch.Tensor]=None
+        u_given: Union[None, torch.Tensor, Tuple[torch.Tensor]]=None
     ) -> torch.Tensor:
         return self.step(x_curr, u_given)
     
@@ -39,13 +39,14 @@ class SmoothParamStepMixin:
     def u_given(self, u_given):
         if u_given is not None:
             self._u_given = u_given
+    
 
 class GDParamStep(SmoothParamStepMixin, GDStep):
     def __init__(
         self,
         stepsize: torch.Tensor,
         grad_map_prm: Callable,
-        stepsize_scheduler: None | Callable=None,
+        stepsize_scheduler: Union[None, Callable]=None,
         linesearch=True,
         tracking: bool=False
     ):
@@ -73,7 +74,7 @@ class NesterovParamStep(SmoothParamStepMixin, NesterovStep):
         self,
         stepsize: torch.Tensor,
         grad_map_prm: Callable,
-        momentum_scheduler: None | Callable=None,
+        momentum_scheduler: Union[None, Callable]=None,
         tracking: bool=False
     ):
         SmoothParamStepMixin.__init__(self, grad_map_prm)
@@ -110,7 +111,7 @@ class FISTAParamStep(NonSmoothParamStepMixin, FISTAStep):
         stepsize: torch.Tensor,
         grad_map_prm: Callable,
         prox_map_prm: Callable,
-        momentum_scheduler: None | Callable=None,
+        momentum_scheduler: Union[None, Callable]=None,
         tracking: bool=False
     ):
         NonSmoothParamStepMixin.__init__(self, grad_map_prm, prox_map_prm)
