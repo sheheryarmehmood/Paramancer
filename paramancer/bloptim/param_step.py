@@ -1,34 +1,36 @@
 import torch
-from typing import Callable, Union, Tuple
+from typing import Callable, Union
+from paramancer.optim.variable import VariableType, ParameterType
 from paramancer.optim.step import GDStep, PolyakStep, NesterovStep
 from paramancer.optim.step import ProxGradStep, FISTAStep
-from paramancer.optim.scheduler import MomentumScheduler
+
+
 
 class SmoothParamStepMixin:
     def __init__(self, grad_map_prm: Callable):
         self._u_given = None
         self.grad_map_prm = grad_map_prm
 
-    def _grad_map(self, x: torch.Tensor) -> torch.Tensor:
+    def _grad_map(self, x: VariableType) -> VariableType:
         return self.grad_map_prm(x, self.u_given)
     
     def step(
         self,
-        x_curr: torch.Tensor,
-        u_given: Union[None, torch.Tensor, Tuple[torch.Tensor]]=None
-    ) -> torch.Tensor:
+        x_curr: VariableType,
+        u_given: Union[None, ParameterType]=None
+    ) -> VariableType:
         self.u_given = u_given
         return super().step(x_curr)
 
     def __call__(
         self,
-        x_curr: torch.Tensor,
-        u_given: Union[None, torch.Tensor, Tuple[torch.Tensor]]=None
-    ) -> torch.Tensor:
+        x_curr: VariableType,
+        u_given: Union[None, ParameterType]=None
+    ) -> VariableType:
         return self.step(x_curr, u_given)
     
     @property
-    def u_given(self):
+    def u_given(self) -> ParameterType:
         if self._u_given is None:
             raise RuntimeError(
                 "Parametric step called without setting u_given"

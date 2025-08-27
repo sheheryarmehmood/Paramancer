@@ -3,12 +3,26 @@ from typing import Union, Tuple
 import torch
 from paramancer.operators.norms import l2
 
-# Types allowed for OptVar construction
+# Types allowed for Variable construction
 TensorLike = torch.Tensor
 FlatVariable = TensorLike
 TupleVariable = Tuple[TensorLike, ...]
 NestedVariable = Tuple[TupleVariable, TupleVariable]
 VariableType = Union[FlatVariable, TupleVariable, NestedVariable]
+
+FlatParameter = FlatVariable
+TupleParameter = TupleVariable
+ParameterType = Union[FlatParameter, TupleParameter]
+
+
+def special_wrapper_for_MomentumStep(fn, self, x_curr, x_prev):
+    was_optvar = isinstance(x_curr, Variable)
+    if not was_optvar:
+        x_curr = Variable(x_curr)
+        x_prev = Variable(x_prev)
+    out = fn(self, x_curr, x_prev)
+    return out if was_optvar else out.data
+
 
 
 class Variable:
@@ -55,6 +69,9 @@ class Variable:
         return Variable(
             self._apply(lambda x1, x2: x1 - x2, self._data, other._data)
         )
+    
+    def __neg__(self):
+        return Variable(self._apply(lambda x: -x, self._data))
 
     def __mul__(self, scalar: float) -> Variable:
         return Variable(self._apply(lambda x: x * scalar, self._data))
@@ -89,28 +106,44 @@ class Variable:
         return self._data
     
     @property
-    def primal(self) -> VariableType:
-        if isinstance(self._data, FlatVariable) or len(self._data) > 2:
-            raise RuntimeError(f"Does work with variables of this type")
-        return self._data[0]
+    def primal(self) -> Variable:
+        if isinstance(self._data, tuple) and len(self._data) == 2:
+            return Variable(self._data[0])
+        raise AttributeError("This Variable has no `primal`.")
     
     @property
-    def dual(self) -> VariableType:
-        if isinstance(self._data, FlatVariable) or len(self._data) > 2:
-            raise RuntimeError(f"Does work with variables of this type")
-        return self._data[1]
+    def dual(self) -> Variable:
+        if isinstance(self._data, tuple) and len(self._data) == 2:
+            return Variable(self._data[1])
+        raise AttributeError("This Variable has no `dual`.")
     
     @property
-    def current(self) -> VariableType:
-        if isinstance(self._data, FlatVariable) or len(self._data) > 2:
-            raise RuntimeError(f"Does work with variables of this type")
-        return self._data[0]
+    def current(self) -> Variable:
+        if isinstance(self._data, tuple) and len(self._data) == 2:
+            return Variable(self._data[0])
+        raise AttributeError("This Variable has no `current`.")
     
     @property
-    def previous(self) -> VariableType:
-        if isinstance(self._data, FlatVariable) or len(self._data) > 2:
-            raise RuntimeError(f"Does work with variables of this type")
-        return self._data[1]
+    def previous(self) -> Variable:
+        if isinstance(self._data, tuple) and len(self._data) == 2:
+            return Variable(self._data[1])
+        raise AttributeError("This Variable has no `previous`.")
 
     def __repr__(self):
         return f"Variable({self._data})"
+    
+    @staticmethod
+    def wrap(fn):
+        def wrapped_fn(x: Variable) -> Variable:
+            return Variable(fn(x.data))
+        return wrapped_fn
+    
+    @staticmethod
+    def ensure(fn):
+        def wrapper(self, x_curr, *args, **kwargs):
+            self._input_is_variable = isinstance(x_curr, Variable)
+            if not self._input_is_variable:
+                x_curr = Variable(x_curr)
+            out = fn(self, x_curr, *args, **kwargs)
+            return out if self._input_is_variable else out.data
+        return wrapper

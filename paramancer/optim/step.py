@@ -2,7 +2,9 @@ import torch
 from enum import Enum
 import abc
 from .scheduler import MomentumScheduler
-from typing import Callable, Union
+from typing import Callable, Union, Tuple
+from .variable import Variable, VariableType
+from paramancer.operators.linalg import adjoint
 
 
 class MomentumType(Enum):
@@ -14,12 +16,13 @@ class OptimizerStep(abc.ABC):
         self._residual_tracking = tracking
         if self._residual_tracking:
             self._residual = None
+        self._input_is_variable = True
     
     @abc.abstractmethod
-    def step(self, x_curr: torch.Tensor) -> torch.Tensor: pass
+    def step(self, x_curr: Variable) -> Variable: pass
     
-    def __call__(self, *args, **kwargs):
-        return self.step(*args, **kwargs)
+    def __call__(self, x_curr: Variable) -> Variable:
+        return self.step(x_curr)
     
     @property
     def residual(self):
@@ -29,7 +32,10 @@ class OptimizerStep(abc.ABC):
             )
         if self._residual is None:
             raise AttributeError("`residual` must be set before referencing")
-        return self._residual
+        if self._input_is_variable:
+            return self._residual
+        else:
+            return self._residual.data
     
     @property
     def residual_tracking(self):
@@ -55,14 +61,13 @@ class MomentumStep(OptimizerStep):
         self.strategy = strategy
         self.momentum_scheduler = momentum_scheduler
     
-    def step(
-        self, x_curr: torch.Tensor, x_prev: torch.Tensor
-    ) -> torch.Tensor:
+    @Variable.ensure
+    def step(self, z_curr: Variable) -> Variable:
         if self.momentum_scheduler:
             self.momentum = self.momentum_scheduler()
-        x_new = self.momentum * (x_curr - x_prev)   # torch.Tensor Operation
+        x_new = self.momentum * (z_curr.current - z_curr.previous)
         if self.strategy == MomentumType.Nesterov:
-            x_new = x_curr + x_new                  # torch.Tensor Operation
+            x_new = z_curr.current + x_new
         return x_new
     
     def is_markovian(self):
@@ -79,11 +84,12 @@ class GDStep(OptimizerStep):
     ):
         super().__init__(tracking=tracking)
         self.stepsize = stepsize
-        self.grad_map = grad_map
+        self.grad_map = Variable.wrap(grad_map)
         self.stepsize_scheduler = stepsize_scheduler
         self.linesearch = linesearch
     
-    def step(self, x_curr: torch.Tensor) -> torch.Tensor:
+    @Variable.ensure
+    def step(self, x_curr: Variable) -> Variable:
         direction = -self.grad_map(x_curr)
         self._set_stepsize(x_curr, direction)
         x_new = x_curr + self.stepsize * direction  # torch.Tensor Operation
@@ -91,7 +97,7 @@ class GDStep(OptimizerStep):
             self._residual = x_new - x_curr         # torch.Tensor Operation
         return x_new
     
-    def _set_stepsize(self, x_curr, direction):
+    def _set_stepsize(self, x_curr: Variable, direction: Variable):
         if not self.stepsize_scheduler:
             return
         if self.linesearch:
@@ -105,10 +111,29 @@ class ProxStep(OptimizerStep):
         prox_map: Callable
     ):
         super().__init__(tracking=False) # No tracking is needed.
-        self.prox_map = prox_map
+        self.prox_map = Variable.wrap(prox_map)
     
-    def step(self, x_curr:torch.Tensor) -> torch.Tensor:
+    @Variable.ensure
+    def step(self, x_curr: Variable) -> Variable:
         return self.prox_map(x_curr)
+
+class AffineStep(OptimizerStep):
+    def __init__(
+        self,
+        operator: Callable,
+        vector: VariableType,
+        residual_tracking: bool=False
+    ):
+        super().__init__(tracking=residual_tracking)
+        self.operator = Variable.wrap(operator)
+        self.vector = Variable(vector)
+    
+    @Variable.ensure
+    def step(self, x_curr: Variable) -> Variable:
+        x_new = self.operator(x_curr) + self.vector
+        if self._residual_tracking:
+            self._residual = x_new - x_curr
+        return x_new
 
 class PolyakStep(OptimizerStep):
     def __init__(
@@ -119,22 +144,23 @@ class PolyakStep(OptimizerStep):
         tracking: bool=False
     ):
         super().__init__(tracking=False) # Uses the tracking of GDStep
-        self.gd_step = GDStep(
-            stepsize, grad_map, tracking=tracking
-        )
+        self.gd_step = GDStep(stepsize, grad_map, tracking=tracking)
         self.mm_step = MomentumStep(momentum, strategy=MomentumType.Polyak)
         self._x_prev = None
     
-    def step(self, x_curr):
+    @Variable.ensure
+    def step(self, x_curr: Variable) -> Variable:
         x_new = self.gd_step(x_curr)
         if self._x_prev is not None:
+            z_curr = Variable((x_curr.data, self._x_prev.data))
             # vvvvv torch.Tensor Operation vvvvv
-            x_new = x_new + self.mm_step(x_curr, self._x_prev)
+            x_new = x_new + self.mm_step(z_curr)
         self._x_prev = x_curr
         return x_new
     
     @property
     def residual(self):
+        self.gd_step._input_is_variable = self._input_is_variable
         return self.gd_step.residual
     
     @property
@@ -170,17 +196,18 @@ class NesterovStep(OptimizerStep):
         )
         self._x_prev = None
     
-    def step(self, x_curr):
+    @Variable.ensure
+    def step(self, x_curr: Variable) -> Variable:
         if self._x_prev is None:
-            x_mm = x_curr
-        else:
-            x_mm = self.mm_step(x_curr, self._x_prev)
-        x_new = self.gd_step(x_mm)
+            self._x_prev = x_curr
+        z_curr = Variable((x_curr.data, self._x_prev.data))
+        x_new = self.gd_step(self.mm_step(z_curr))
         self._x_prev = x_curr
         return x_new
     
     @property
     def residual(self):
+        self.gd_step._input_is_variable = self._input_is_variable
         return self.gd_step.residual
     
     @property
@@ -196,6 +223,10 @@ class NesterovStep(OptimizerStep):
     @x_prev.setter
     def x_prev(self, x):
         self._x_prev = x
+    
+    def restart(self):
+        self._x_prev = None
+        self.mm_step.momentum_scheduler.restart()
 
 class ProxGradStep(OptimizerStep):
     def __init__(
@@ -209,7 +240,8 @@ class ProxGradStep(OptimizerStep):
         self.gd_step = GDStep(stepsize, grad_map, tracking=False)
         self.prox_step = ProxStep(prox_map)
     
-    def step(self, x_curr):
+    @Variable.ensure
+    def step(self, x_curr: Variable) -> Variable:
         x_new = self.prox_step(self.gd_step(x_curr))
         if self._residual_tracking:
             self._residual = x_new - x_curr         # torch.Tensor Operation
@@ -235,15 +267,18 @@ class FISTAStep(OptimizerStep):
         )
         self._x_prev = None
     
-    def step(self, x_curr):
+    @Variable.ensure
+    def step(self, x_curr: Variable) -> Variable:
         if self._x_prev is None:
             self._x_prev = x_curr
-        x_new = self.pgd_step(self.mm_step(x_curr, self._x_prev))
+        z_curr = Variable((x_curr.data, self._x_prev.data))
+        x_new = self.pgd_step(self.mm_step(z_curr))
         self._x_prev = x_curr
         return x_new
     
     @property
     def residual(self):
+        self.pgd_step._input_is_variable = self._input_is_variable
         return self.pgd_step.residual
     
     @property
@@ -259,6 +294,10 @@ class FISTAStep(OptimizerStep):
     @x_prev.setter
     def x_prev(self, x):
         self._x_prev = x
+    
+    def restart(self):
+        self._x_prev = None
+        self.mm_step.momentum_scheduler.restart()
 
 
 class PDHGPartialStep(OptimizerStep):
@@ -266,18 +305,17 @@ class PDHGPartialStep(OptimizerStep):
         self,
         stepsize: torch.Tensor,
         lin_op: Callable,
-        prox_map: Callable,
-        residual_tracking: bool=False
+        prox_map: Callable
     ):
-        super().__init__(tracking=residual_tracking)
+        super().__init__(tracking=False) # No tracking is needed.
         self.stepsize = stepsize
-        self.lin_op = lin_op
+        self.lin_op = Variable.wrap(lin_op)
         self.prox_step = ProxStep(prox_map)
     
+    @Variable.ensure
     def step(
-        self, inp_curr: torch.Tensor, oth_curr: torch.Tensor
-    ) -> torch.Tensor:
-        # vvvvv torch.Tensor Operation vvvvv
+        self, inp_curr: Variable, oth_curr: Variable
+    ) -> Variable:
         return self.prox_step(
             inp_curr - self.stepsize * self.lin_op(oth_curr)
         )
@@ -292,11 +330,12 @@ class PDHGStep(OptimizerStep):
         prox_map_dual: Callable,
         lin_op: Callable,
         lin_op_adj: Callable=None,
+        zero_el: Union[None, torch.Tensor, Tuple[torch.Tensor, ...]]=None,
         residual_tracking: bool=False
     ):
         super().__init__(residual_tracking)
         if lin_op_adj is None:
-            lin_op_adj = ... # TODO
+            lin_op_adj = self._setup_lin_op_adj(lin_op, zero_el)
         self.primal_step = PDHGPartialStep(
             stepsize_primal, prox_map_primal, lin_op_adj
         )
@@ -304,12 +343,23 @@ class PDHGStep(OptimizerStep):
             stepsize_dual, prox_map_dual, lin_op
         )
     
-    def step(
-        self, x_primal_curr: torch.Tensor, x_dual_curr: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        x_primal_next = self.primal_step(x_primal_curr, x_dual_curr)
-        # vvvvv torch.Tensor Operation vvvvv
-        x_primal_curr = 2 * x_primal_next - x_primal_curr
-        x_dual_next = self.dual_step(x_dual_curr, -x_primal_curr)
-        return x_primal_next, x_dual_next
+    @Variable.ensure
+    def step(self, z_curr: Variable) -> Variable:
+        x_prim = self.primal_step(z_curr.primal, z_curr.dual)
+        x_prim_mm = 2 * x_prim - z_curr.primal
+        x_dual = self.dual_step(z_curr.dual, -x_prim_mm)
+        z_new = Variable((x_prim.data, x_dual.data))
+        if self._residual_tracking:
+            self._residual = z_new - z_curr         # torch.Tensor Operation
+        return z_new
     
+    def _setup_lin_op_adj(self, lin_op, zero_el):
+        if zero_el is not None:
+            raise ValueError(
+                "Either the adjoint linear map must be provided beforehand or"
+                " the zero element must be given for automatic computation."
+            )
+        if isinstance(zero_el, tuple):
+            lin_op = lambda *args: lin_op(args)
+        return adjoint(lin_op, zero_el)
+        

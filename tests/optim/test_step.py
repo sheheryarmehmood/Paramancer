@@ -7,7 +7,7 @@ from paramancer.optim.step import PolyakStep, NesterovStep
 from paramancer.optim.step import ProxGradStep, FISTAStep
 
 
-def test_gd_step_squrared_euclidean():
+def test_gd_step_squared_euclidean():
     num_examples = 50
     stepsize = torch.linspace(0.1, 0.5, num_examples)
     x_curr = torch.linspace(1, 10, num_examples)
@@ -204,7 +204,8 @@ def test_fista_residual_attribute_duplication():
     
     # FISTAStep residual must come from its ProxGradStep.
     assert torch.allclose(
-        fista_step.residual, fista_step.pgd_step._residual, atol=1e-5
+        fista_step.residual, fista_step.pgd_step._residual.data, 
+        atol=1e-5
     )
     
     def check_if_has_attr_prop(

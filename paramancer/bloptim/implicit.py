@@ -1,5 +1,7 @@
 import torch
 from typing import Callable, Union, Tuple
+
+from paramancer.optim.variable import Variable, VariableType
 from paramancer.bloptim.neumann import neumann_series
 from paramancer.optim.step import OptimizerStep
 import torch.autograd.functional as agF

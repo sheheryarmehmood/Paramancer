@@ -1,11 +1,12 @@
 import torch
 from tqdm import tqdm
-from typing import Callable
+from typing import Callable, Tuple, Union
 
+
+from .variable import Variable, VariableType
 from .step import OptimizerStep
 from .step import GDStep, PolyakStep, NesterovStep
-from .step import ProxGradStep, FISTAStep
-from .scheduler import MomentumScheduler
+from .step import ProxGradStep, FISTAStep, PDHGStep
 from .util import OptimizationResult, default_metric
 
 class Optimizer:
@@ -28,14 +29,15 @@ class Optimizer:
         self.result = None
     
     def __call__(
-        self, x_init: torch.Tensor, iters: None | int=None
-    ) -> torch.Tensor:
+        self, x_init: VariableType, iters: None | int=None
+    ) -> VariableType:
         return self.run(x_init, iters)
     
     def run(
-        self, x_init: torch.Tensor, iters: None | int=None
-    ) -> torch.Tensor:
-        x_curr = x_init.clone()                     # torch.Tensor Operation
+        self, x_init: VariableType, iters: None | int=None
+    ) -> VariableType:
+        
+        x_curr = Variable(x_init)                     # torch.Tensor Operation
         if self.store_history:
             self.history.append(x_curr.clone())     # torch.Tensor Operation
         
@@ -57,9 +59,9 @@ class Optimizer:
             
             if self.step.residual_tracking:
                 # vvvvv torch.Tensor Operation vvvvv
-                metric_val = default_metric(self.step.residual)
+                metric_val = self.step.residual.norm()
             else:
-                metric_val = self.metric(x_curr)
+                metric_val = self.metric(x_curr.data)
 
             if self.verbose:
                 pbar.set_description(f"{metric_val:.6e}")
@@ -75,7 +77,7 @@ class Optimizer:
             converged=converged
         )
 
-        return x_curr
+        return x_curr.data
 
 
 class GradientDescent(Optimizer):
@@ -132,7 +134,7 @@ class AcceleratedGradient(Optimizer):
         super().__init__(step, tol, iters, metric, store_history, verbose)
     
     def restart(self):
-        self.step.momentum_scheduler.restart()
+        self.step.restart()
 
 
 class ProximalGradient(Optimizer):
@@ -175,5 +177,30 @@ class FISTA(Optimizer):
         super().__init__(step, tol, iters, metric, store_history, verbose)
     
     def restart(self):
-        self.step.momentum_scheduler.restart()
+        self.step.restart()
+
+
+class PDHG(Optimizer):
+    def __init__(
+        self,
+        stepsize_primal: torch.Tensor,
+        stepsize_dual: torch.Tensor,
+        prox_map_primal: Callable,
+        prox_map_dual: Callable,
+        lin_op: Callable,
+        lin_op_adj: Callable=None,
+        zero_el: Union[None, torch.Tensor, Tuple[torch.Tensor, ...]]=None,
+        tol: float=1e-5,
+        iters: int=100,
+        metric: None | str | Callable=None,
+        store_history = False,
+        verbose = False
+    ):
+        """Eactly one out of `zero_el` and `lin_op_adj` should be `None`.
+        """
+        step = PDHGStep(
+            stepsize_primal, stepsize_dual, prox_map_primal, prox_map_dual,
+            lin_op, lin_op_adj, zero_el, tracking=(metric == "default")
+        )
+        super().__init__(step, tol, iters, metric, store_history, verbose)
 
