@@ -22,7 +22,7 @@ def test_variable_data():
     ker_d1 = torch.rand(2, 1, 3, 3)             # kernel
     imgs = torch.rand(10, 3, 64, 64)            # primal variable
     imgs_d1 = conv_op(imgs, ker_d1)             # dual variable
-    x_curr = Variable((imgs, imgs_d1))          # primal and dual tensors
+    x_curr = Variable.from_pdhg(imgs, imgs_d1)  # primal and dual tensors
     assert torch.allclose(x_curr.primal.data, imgs)
     assert torch.allclose(x_curr.dual.data, imgs_d1)
     
@@ -38,10 +38,9 @@ def test_variable_data():
     edgs_d1 = conv_op(edgs, ker_d2)             # dual variable 2
     edgs_d2 = conv_op(edgs_d1, ker_d3)          # dual variable 2
     
-    x_curr = Variable((
-        (imgs, imgs_d1, imgs_d2),
-        (edgs, edgs_d1, edgs_d2)
-    ))
+    x_curr = Variable.from_pdhg(
+        (imgs, imgs_d1, imgs_d2), (edgs, edgs_d1, edgs_d2)
+    )
     assert torch.allclose(x_curr.primal.data[0], imgs)
     assert torch.allclose(x_curr.primal.data[1], imgs_d1)
     assert torch.allclose(x_curr.primal.data[2], imgs_d2)

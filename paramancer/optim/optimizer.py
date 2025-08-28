@@ -29,17 +29,16 @@ class Optimizer:
         self.result = None
     
     def __call__(
-        self, x_init: VariableType, iters: None | int=None
-    ) -> VariableType:
+        self, x_init: Union[Variable, VariableType], iters: None | int=None
+    ) -> Union[Variable, VariableType]:
         return self.run(x_init, iters)
     
-    def run(
-        self, x_init: VariableType, iters: None | int=None
-    ) -> VariableType:
+    @Variable.ensure
+    def run(self, x_init: Variable, iters: None | int=None) -> Variable:
         
-        x_curr = Variable(x_init)                     # torch.Tensor Operation
+        x_curr = x_init.clone()
         if self.store_history:
-            self.history.append(x_curr.clone())     # torch.Tensor Operation
+            self.history.append(x_curr.clone())
         
         if iters is not None:
             self.iters = iters
@@ -52,7 +51,7 @@ class Optimizer:
             x_curr = self.step(x_curr)
             
             if self.store_history:
-                self.history.append(x_curr.clone()) # torch.Tensor Operation
+                self.history.append(x_curr.clone())
             
             if not self.metric and not self.step.residual_tracking:
                 continue
@@ -77,7 +76,7 @@ class Optimizer:
             converged=converged
         )
 
-        return x_curr.data
+        return x_curr
 
 
 class GradientDescent(Optimizer):

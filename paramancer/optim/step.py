@@ -21,7 +21,9 @@ class OptimizerStep(abc.ABC):
     @abc.abstractmethod
     def step(self, x_curr: Variable) -> Variable: pass
     
-    def __call__(self, x_curr: Variable) -> Variable:
+    def __call__(
+        self, x_curr: Union[Variable, VariableType]
+    ) -> Union[Variable, VariableType]:
         return self.step(x_curr)
     
     @property
@@ -152,7 +154,7 @@ class PolyakStep(OptimizerStep):
     def step(self, x_curr: Variable) -> Variable:
         x_new = self.gd_step(x_curr)
         if self._x_prev is not None:
-            z_curr = Variable((x_curr.data, self._x_prev.data))
+            z_curr = Variable.from_momentum(x_curr, self._x_prev)
             # vvvvv torch.Tensor Operation vvvvv
             x_new = x_new + self.mm_step(z_curr)
         self._x_prev = x_curr
@@ -200,7 +202,7 @@ class NesterovStep(OptimizerStep):
     def step(self, x_curr: Variable) -> Variable:
         if self._x_prev is None:
             self._x_prev = x_curr
-        z_curr = Variable((x_curr.data, self._x_prev.data))
+        z_curr = Variable.from_momentum(x_curr, self._x_prev)
         x_new = self.gd_step(self.mm_step(z_curr))
         self._x_prev = x_curr
         return x_new
@@ -271,7 +273,7 @@ class FISTAStep(OptimizerStep):
     def step(self, x_curr: Variable) -> Variable:
         if self._x_prev is None:
             self._x_prev = x_curr
-        z_curr = Variable((x_curr.data, self._x_prev.data))
+        z_curr = Variable.from_momentum(x_curr, self._x_prev)
         x_new = self.pgd_step(self.mm_step(z_curr))
         self._x_prev = x_curr
         return x_new
@@ -348,7 +350,7 @@ class PDHGStep(OptimizerStep):
         x_prim = self.primal_step(z_curr.primal, z_curr.dual)
         x_prim_mm = 2 * x_prim - z_curr.primal
         x_dual = self.dual_step(z_curr.dual, -x_prim_mm)
-        z_new = Variable((x_prim.data, x_dual.data))
+        z_new = Variable.from_pdhg(x_prim, x_dual)
         if self._residual_tracking:
             self._residual = z_new - z_curr         # torch.Tensor Operation
         return z_new

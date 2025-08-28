@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Union, Tuple
 import torch
-from paramancer.operators.norms import l2
+from enum import Enum
 
 # Types allowed for Variable construction
 TensorLike = torch.Tensor
@@ -13,15 +13,6 @@ VariableType = Union[FlatVariable, TupleVariable, NestedVariable]
 FlatParameter = FlatVariable
 TupleParameter = TupleVariable
 ParameterType = Union[FlatParameter, TupleParameter]
-
-
-def special_wrapper_for_MomentumStep(fn, self, x_curr, x_prev):
-    was_optvar = isinstance(x_curr, Variable)
-    if not was_optvar:
-        x_curr = Variable(x_curr)
-        x_prev = Variable(x_prev)
-    out = fn(self, x_curr, x_prev)
-    return out if was_optvar else out.data
 
 
 
@@ -147,3 +138,26 @@ class Variable:
             out = fn(self, x_curr, *args, **kwargs)
             return out if self._input_is_variable else out.data
         return wrapper
+    
+    @staticmethod
+    def _from_pair(
+        var1: Union[VariableType, Variable],
+        var2: Union[VariableType, Variable]
+    ) -> Variable:
+        v1 = var1.data if isinstance(var1, Variable) else var1
+        v2 = var2.data if isinstance(var2, Variable) else var2
+        return Variable((v1, v2))
+
+    @staticmethod
+    def from_momentum(
+        curr: Union[VariableType, Variable],
+        prev: Union[VariableType, Variable]
+    ) -> Variable:
+        return Variable._from_pair(curr, prev)
+
+    @staticmethod
+    def from_pdhg(
+        primal: Union[VariableType, Variable],
+        dual: Union[VariableType, Variable]
+    ) -> Variable:
+        return Variable._from_pair(primal, dual)
