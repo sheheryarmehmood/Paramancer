@@ -1,4 +1,5 @@
 from __future__ import annotations
+from functools import wraps
 from typing import Union, Tuple
 import torch
 from enum import Enum
@@ -9,11 +10,6 @@ FlatVariable = TensorLike
 TupleVariable = Tuple[TensorLike, ...]
 NestedVariable = Tuple[TupleVariable, TupleVariable]
 VariableType = Union[FlatVariable, TupleVariable, NestedVariable]
-
-FlatParameter = FlatVariable
-TupleParameter = TupleVariable
-ParameterType = Union[FlatParameter, TupleParameter]
-
 
 
 class Variable:
@@ -27,7 +23,7 @@ class Variable:
     while preserving the input structure.
     """
 
-    def __init__(self, data: VariableType):
+    def __init__(self, data: VariableType, level="lower"):
         self._data = data
 
     # ------------------------
@@ -130,7 +126,8 @@ class Variable:
         return wrapped_fn
     
     @staticmethod
-    def ensure(fn):
+    def ensure_var_input(fn):
+        @wraps(fn)
         def wrapper(self, x_curr, *args, **kwargs):
             self._input_is_variable = isinstance(x_curr, Variable)
             if not self._input_is_variable:
@@ -161,3 +158,5 @@ class Variable:
         dual: Union[VariableType, Variable]
     ) -> Variable:
         return Variable._from_pair(primal, dual)
+
+

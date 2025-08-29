@@ -63,7 +63,7 @@ class MomentumStep(OptimizerStep):
         self.strategy = strategy
         self.momentum_scheduler = momentum_scheduler
     
-    @Variable.ensure
+    @Variable.ensure_var_input
     def step(self, z_curr: Variable) -> Variable:
         if self.momentum_scheduler:
             self.momentum = self.momentum_scheduler()
@@ -90,13 +90,13 @@ class GDStep(OptimizerStep):
         self.stepsize_scheduler = stepsize_scheduler
         self.linesearch = linesearch
     
-    @Variable.ensure
+    @Variable.ensure_var_input
     def step(self, x_curr: Variable) -> Variable:
         direction = -self.grad_map(x_curr)
         self._set_stepsize(x_curr, direction)
-        x_new = x_curr + self.stepsize * direction  # torch.Tensor Operation
+        x_new = x_curr + self.stepsize * direction
         if self._residual_tracking:
-            self._residual = x_new - x_curr         # torch.Tensor Operation
+            self._residual = x_new - x_curr
         return x_new
     
     def _set_stepsize(self, x_curr: Variable, direction: Variable):
@@ -115,7 +115,7 @@ class ProxStep(OptimizerStep):
         super().__init__(tracking=False) # No tracking is needed.
         self.prox_map = Variable.wrap(prox_map)
     
-    @Variable.ensure
+    @Variable.ensure_var_input
     def step(self, x_curr: Variable) -> Variable:
         return self.prox_map(x_curr)
 
@@ -130,7 +130,7 @@ class AffineStep(OptimizerStep):
         self.operator = Variable.wrap(operator)
         self.vector = Variable(vector)
     
-    @Variable.ensure
+    @Variable.ensure_var_input
     def step(self, x_curr: Variable) -> Variable:
         x_new = self.operator(x_curr) + self.vector
         if self._residual_tracking:
@@ -150,7 +150,7 @@ class PolyakStep(OptimizerStep):
         self.mm_step = MomentumStep(momentum, strategy=MomentumType.Polyak)
         self._x_prev = None
     
-    @Variable.ensure
+    @Variable.ensure_var_input
     def step(self, x_curr: Variable) -> Variable:
         x_new = self.gd_step(x_curr)
         if self._x_prev is not None:
@@ -198,7 +198,7 @@ class NesterovStep(OptimizerStep):
         )
         self._x_prev = None
     
-    @Variable.ensure
+    @Variable.ensure_var_input
     def step(self, x_curr: Variable) -> Variable:
         if self._x_prev is None:
             self._x_prev = x_curr
@@ -242,7 +242,7 @@ class ProxGradStep(OptimizerStep):
         self.gd_step = GDStep(stepsize, grad_map, tracking=False)
         self.prox_step = ProxStep(prox_map)
     
-    @Variable.ensure
+    @Variable.ensure_var_input
     def step(self, x_curr: Variable) -> Variable:
         x_new = self.prox_step(self.gd_step(x_curr))
         if self._residual_tracking:
@@ -269,7 +269,7 @@ class FISTAStep(OptimizerStep):
         )
         self._x_prev = None
     
-    @Variable.ensure
+    @Variable.ensure_var_input
     def step(self, x_curr: Variable) -> Variable:
         if self._x_prev is None:
             self._x_prev = x_curr
@@ -314,7 +314,7 @@ class PDHGPartialStep(OptimizerStep):
         self.lin_op = Variable.wrap(lin_op)
         self.prox_step = ProxStep(prox_map)
     
-    @Variable.ensure
+    @Variable.ensure_var_input
     def step(
         self, inp_curr: Variable, oth_curr: Variable
     ) -> Variable:
@@ -345,7 +345,7 @@ class PDHGStep(OptimizerStep):
             stepsize_dual, prox_map_dual, lin_op
         )
     
-    @Variable.ensure
+    @Variable.ensure_var_input
     def step(self, z_curr: Variable) -> Variable:
         x_prim = self.primal_step(z_curr.primal, z_curr.dual)
         x_prim_mm = 2 * x_prim - z_curr.primal

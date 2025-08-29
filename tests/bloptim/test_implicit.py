@@ -2,7 +2,7 @@ import torch
 import torch.autograd.functional as agF
 import torch.linalg as la
 
-from paramancer.bloptim.param_step import GDParamStep
+from paramancer.bloptim.param_step import GDMarkovParamStep
 from paramancer.bloptim import ImplicitDifferentiation
 
 
@@ -24,7 +24,7 @@ def test_implicit():
     A_grad_anl, b_grad_anl = agF.vjp(minimizer, u_given, xmin_grad)[1]
 
     lip = la.matrix_norm(A.T @ A, ord=2)
-    gd_step = GDParamStep(stepsize=1/lip, grad_map_prm=grad_fn_prm)
+    gd_step = GDMarkovParamStep(stepsize=1/lip, grad_map_prm=grad_fn_prm)
 
     imp_diff = ImplicitDifferentiation(
         gd_step, iters=K, metric="default", tol=1e-9

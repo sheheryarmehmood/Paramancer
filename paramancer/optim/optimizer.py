@@ -7,7 +7,7 @@ from .variable import Variable, VariableType
 from .step import OptimizerStep
 from .step import GDStep, PolyakStep, NesterovStep
 from .step import ProxGradStep, FISTAStep, PDHGStep
-from .util import OptimizationResult, default_metric
+from .util import OptimizationResult
 
 class Optimizer:
     def __init__(
@@ -33,7 +33,7 @@ class Optimizer:
     ) -> Union[Variable, VariableType]:
         return self.run(x_init, iters)
     
-    @Variable.ensure
+    @Variable.ensure_var_input
     def run(self, x_init: Variable, iters: None | int=None) -> Variable:
         
         x_curr = x_init.clone()
