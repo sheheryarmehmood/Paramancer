@@ -306,13 +306,20 @@ class PDHGPartialStep(OptimizerStep):
     def __init__(
         self,
         stepsize: torch.Tensor,
-        lin_op: Callable,
-        prox_map: Callable
+        prox_map: Callable,
+        lin_op: Callable
     ):
         super().__init__(tracking=False) # No tracking is needed.
         self.stepsize = stepsize
         self.lin_op = Variable.wrap(lin_op)
         self.prox_step = ProxStep(prox_map)
+    
+    def __call__(
+        self,
+        inp_curr: Union[Variable, VariableType], 
+        oth_curr: Union[Variable, VariableType]
+    ) -> Union[Variable, VariableType]:
+        return self.step(inp_curr, oth_curr)
     
     @Variable.ensure_var_input
     def step(
@@ -356,12 +363,12 @@ class PDHGStep(OptimizerStep):
         return z_new
     
     def _setup_lin_op_adj(self, lin_op, zero_el):
-        if zero_el is not None:
+        if zero_el is None:
             raise ValueError(
                 "Either the adjoint linear map must be provided beforehand or"
                 " the zero element must be given for automatic computation."
             )
         if isinstance(zero_el, tuple):
-            lin_op = lambda *args: lin_op(args)
-        return adjoint(lin_op, zero_el)
+            lin_op_ = lambda *args: lin_op(args)
+        return adjoint(lin_op_, zero_el)
         

@@ -4,7 +4,8 @@ import torch.nn.functional as nnF
 
 from paramancer.optim.step import ProxStep, GDStep, MomentumStep
 from paramancer.optim.step import PolyakStep, NesterovStep
-from paramancer.optim.step import ProxGradStep, FISTAStep
+from paramancer.optim.step import ProxGradStep, FISTAStep, PDHGStep
+from paramancer.operators.linalg import adjoint
 
 
 def test_gd_step_squared_euclidean():
@@ -279,3 +280,43 @@ def test_markovian_property():
     assert not nag_step.is_markovian()
     assert pgd_step.is_markovian()
     assert not fista_step.is_markovian()
+
+
+def test_pdhg_tensor_tuples():
+    def prox_primal(prim):
+        return prim[0] ** 2, prim[1] + prim[2], prim[1] - prim[2]
+    def prox_dual(dual):
+        return dual[0], 2 * dual[1], dual[2] / 2
+    def lin_op(prim):
+        return (
+            prim[1][:2] + 4*prim[2][2:4] - prim[0][-2:],
+            prim[0][1:4] + prim[2][2:],
+            prim[0][2:9]
+        )
+    zero_el = (torch.zeros(11), torch.zeros(5), torch.zeros(5))
+    lin_op_adj = adjoint(
+        lambda *args: lin_op(args), 
+        zero_el
+    )
+    ss_p = torch.tensor(0.1)
+    ss_d = torch.tensor(0.5)
+    
+    prim_prev = (torch.randn(11), torch.rand(5), torch.randn(5))
+    dual_prev = (torch.randn(2), torch.rand(3), torch.randn(7))
+    
+    prim_next_out = prox_primal(tuple(
+        p - ss_p * lad for p, lad in zip(prim_prev, lin_op_adj(dual_prev))
+    ))
+    xs_pt = tuple(2 * x_p1 - x_p for x_p, x_p1 in zip(prim_next_out, prim_prev))
+    dual_prev = prox_dual(tuple(
+        x_d - ss_d * lx_p for x_d, lx_p in zip(dual_prev, lin_op(xs_pt))
+    ))
+    
+    pdhg_step = PDHGStep(
+        ss_p, ss_d, prox_primal, prox_dual, lin_op, zero_el=zero_el
+    )
+    xs_p1s, xs_d1s = pdhg_step((prim_prev, dual_prev))
+    
+    assert torch.allclose(xs_p1s[0], prim_next_out[0])
+    
+    

@@ -70,6 +70,11 @@ class Variable:
     # ------------------------
     def clone(self) -> Variable:
         return Variable(self._apply(lambda x: x.clone(), self._data))
+    
+    def requires_grad_(self, requires_grad) -> Variable:
+        return Variable(
+            self._apply(lambda x: x.requires_grad_(requires_grad), self._data)
+        )
 
     # ------------------------
     # Norm (flatten recursively)

@@ -68,25 +68,5 @@ def test_prox_grad_tensor_tuples():
     assert torch.allclose(pgd_xvs.data[1], pgd_xs[1])
     assert torch.allclose(pgd_xvs.data[2], pgd_xs[2])
 
-def test_pdhg_tensor_tuples():
-    def prox_primal(xs_p):
-        return xs_p[0] ** 2, xs_p[1] + xs_p[2], xs_p[1] - xs_p[2]
-    def prox_dual(xs_d):
-        return xs_d[0], 2 * xs_d[1], xs_d[2] / 2
-    def lin_op(xs_p):
-        return (
-            xs_p[1][:2] + 4*xs_p[2][2:4] - xs_p[0][-2:],
-            xs_p[0][1:4] + xs_p[2][2:],
-            xs_p[0][2:9]
-        )
-    lin_op_adj = adjoint(
-        lambda *args: lin_op(args), 
-        (torch.zeros(11), torch.zeros(5), torch.zeros(5))
-    )
-    ss_p = torch.tensor(0.1)
-    ss_d = torch.tensor(0.5)
-    
-    xs_p = (torch.randn(11), torch.rand(5), torch.randn(5))
-    xs_d = (torch.randn(2), torch.rand(3), torch.randn(7))
-    
-    # breakpoint()
+
+
