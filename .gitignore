@@ -1,5 +1,6 @@
 .vscode/
 __pycache__/
+.pytest_cache/
 paramancer/__pycache__/
 paramancer/operators/__pycache__/
 paramancer/optim/__pycache__/

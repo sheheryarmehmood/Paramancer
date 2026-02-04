@@ -1,6 +1,6 @@
 from __future__ import annotations
 from functools import wraps
-from typing import Union, Tuple
+from typing import Union, Tuple, Any
 import torch
 from enum import Enum
 
@@ -10,7 +10,94 @@ TensorLike = torch.Tensor
 FlatVariable = TensorLike
 TupleVariable = Tuple[FlatVariable, ...]
 NestedVariable = Tuple[TupleVariable, TupleVariable]
+
 VariableType = Union[FlatVariable, TupleVariable, NestedVariable]
+ApplyType = Tuple[TensorLike, ...]
+SpecType = Tuple[Any, ...]
+
+
+def _is_tensor(x: Any) -> bool:
+    return isinstance(x, torch.Tensor)
+
+def _is_tuple_of_tensors(x: Any) -> bool:
+    return isinstance(x, tuple) and all(_is_tensor(t) for t in x)
+
+def _is_nested_variable(x: Any) -> bool:
+    # exactly: ( (tensors...), (tensors...) )
+    return (
+        isinstance(x, tuple)
+        and len(x) == 2
+        and _is_tuple_of_tensors(x[0])
+        and _is_tuple_of_tensors(x[1])
+    )
+
+def _is_valid(x: Any) -> bool:
+    return _is_tensor(x) or _is_tuple_of_tensors(x) or _is_nested_variable(x)
+
+def flatten(data: VariableType) -> Tuple[ApplyType, SpecType]:
+    """
+    Flattens VariableType into a flat tuple of tensors plus a spec to reconstruct it.
+
+    Spec encodings:
+    - ("flat",)
+    - ("tuple", n)
+    - ("nested", n_left, n_right)
+    """
+    if _is_tensor(data):
+        return (data,), ("flat",)
+    
+    if _is_tuple_of_tensors(data):
+        return data, ("tuple", len(data))
+    
+    if _is_nested_variable(data):
+        left, right = data
+        flat = (*left, *right)
+        return flat, ("nested", len(left), len(right))
+
+def unflatten(flat: ApplyType, spec: SpecType) -> VariableType:
+    """
+    Reconstructs VariableType from a flat tuple of tensors and a spec produced by `flatten`.
+    """
+    if not _is_tuple_of_tensors(flat):
+        raise TypeError("`flat` must be a tuple of torch.Tensor.")
+    
+    if not isinstance(spec, tuple) or len(spec) < 1:
+        raise TypeError("`spec` must be a non-empty tuple.")
+    
+    tag = spec[0]
+    if tag == "flat":
+        if len(flat) != 1:
+            raise ValueError(
+                f"Spec {spec} expects exactly 1 tensor, got {len(flat)}."
+            )
+        return flat[0]
+    
+    if tag == "tuple":
+        if len(spec) != 2 or not isinstance(spec[1], int):
+            raise TypeError("Spec ('tuple', n) must have an int n.")
+        n = spec[1]
+        if len(flat) != n:
+            raise ValueError(
+                f"Spec {spec} expects {n} tensors, got {len(flat)}."
+            )
+        return tuple(flat)
+    
+    if tag == "nested":
+        if (
+            len(spec) != 3 or not isinstance(spec[1], int) or 
+            not isinstance(spec[2], int)
+        ):
+            raise TypeError(
+                "Spec ('nested', n_left, n_right) must have two ints."
+            )
+        nL, nR = spec[1], spec[2]
+        if len(flat) != nL + nR:
+            raise ValueError(
+                f"Spec {spec} expects {nL+nR} tensors, got {len(flat)}."
+            )
+        left = tuple(flat[:nL])
+        right = tuple(flat[nL:nL + nR])
+        return (left, right)
 
 
 class Variable:
@@ -24,9 +111,23 @@ class Variable:
     while preserving the input structure.
     """
 
-    def __init__(self, data: VariableType, level="lower"):
+    def __init__(self, data: VariableType, level: str = "lower"):
+        if not _is_valid(data):
+            raise TypeError(
+                "Unsupported VariableType. Expected Tensor, Tuple[Tensor,...],"
+                " or Tuple[Tuple[Tensor,...], Tuple[Tensor,...]]."
+            )
         self._data = data
         self._level = level
+    
+    def flatten(self):
+        return flatten(self.data)
+    
+    @staticmethod
+    def unflatten(flat: ApplyType, spec: SpecType) -> VariableType:
+        return unflatten(flat, spec)
+        
+        
 
     # ------------------------
     # Utility: recursive apply
@@ -34,7 +135,7 @@ class Variable:
     @staticmethod
     def _apply(fn, var1, var2=None):
         """Apply fn recursively on a (and b if provided)."""
-        if isinstance(var1, FlatVariable):
+        if _is_tensor(var1):
             return fn(var1, var2) if var2 is not None else fn(var1)
         elif isinstance(var1, tuple):
             if var2 is None:
@@ -165,15 +266,5 @@ class Variable:
         dual: Union[VariableType, Variable]
     ) -> Variable:
         return Variable._from_pair(primal, dual)
-    
-    
-    def flatten(self) -> Union[Tuple[TensorLike, ...], Tuple[int]]:
-        pass
-    
-    @staticmethod
-    def unflatten(
-        collection: Tuple[TensorLike, ...], spec: Tuple[int]
-    ) -> Variable:
-        pass
 
 

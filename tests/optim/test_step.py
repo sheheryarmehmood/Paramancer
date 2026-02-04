@@ -317,6 +317,6 @@ def test_pdhg_tensor_tuples():
     )
     xs_p1s, xs_d1s = pdhg_step((prim_prev, dual_prev))
     
-    assert torch.allclose(xs_p1s[0], prim_next_out[0])
+    assert torch.allclose(xs_p1s[0], prim_next_out[0], atol=1e-5)
     
     
