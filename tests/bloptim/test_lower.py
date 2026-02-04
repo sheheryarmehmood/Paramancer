@@ -2,7 +2,7 @@ import torch
 import torch.linalg as la
 import torch.autograd.functional as agF
 from paramancer.bloptim.lower import OptimizerID
-from paramancer.bloptim.param_step import GDMarkovParamStep, PolyakMarkovParamStep
+from paramancer.bloptim.step import GDMarkovParamStep, PolyakMarkovParamStep
 
 def test_gd_with_imp_diff():
     M, N = 10, 8
@@ -27,7 +27,7 @@ def test_gd_with_imp_diff():
     b_given = b.detach().clone().requires_grad_()
     xm_id = OptimizerID.apply(
         A_given, b_given, x_init, param_step, "default", 1e-8, None, 50000, 
-        None, 2
+        None, 2, 1
     )
     xm_id.backward(xm_grad)
     
@@ -61,7 +61,7 @@ def test_hb_with_imp_diff():
     b_given = b.detach().clone().requires_grad_()
     xm_id = OptimizerID.apply(
         A_given, b_given, x_init, param_step, "default", 1e-8, None, 1000, 
-        None, 2
+        None, 2, 1
     )
     xm_id.backward(xm_grad)
     

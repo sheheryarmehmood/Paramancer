@@ -2,17 +2,20 @@ import torch
 from paramancer.optim.step import OptimizerStep
 from paramancer.optim import Optimizer
 from .implicit import ImplicitDifferentiation
+from .step import GDMarkovParamStep
+from .parameter import ParameterType, Parameter
+from ..optim.variable import Variable, VariableType
 
 from typing import Callable, Union, Tuple
 
 class OptimizerID(torch.autograd.Function):
     @staticmethod
     def forward(ctx, *args) -> torch.Tensor:
-        num_u = args[-1]
-        u_given, x_init = args[:num_u], args[num_u]
-        param_step, metric, tol_fwd, _, iters_fwd = args[num_u+1:-2]
-        tol_bwd = tol_fwd if args[-4] is None else args[-4]
-        iters_bwd = iters_fwd if args[-2] is None else args[-2]
+        num_u, num_x = args[-2:]
+        u_given, x_init = args[:num_u], args[num_u:num_u + num_x]
+        param_step, metric, tol_fwd, _, iters_fwd = args[num_u+1:-3]
+        tol_bwd = tol_fwd if args[-4] is None else args[-5]
+        iters_bwd = iters_fwd if args[-2] is None else args[-3]
         param_step.u_given = u_given
         optimizer = Optimizer(param_step, tol_fwd, iters_fwd, metric=metric)
         xmin = optimizer(x_init)
@@ -37,4 +40,38 @@ class OptimizerID(torch.autograd.Function):
         u_grad = imp_diff(xmin, u_given, xmin_grad)
         if len(u_grad) == 1: u_grad = u_grad,
         return *u_grad, *((None,) * 8)
+
+
+class Optimizer:
+    def __init__(
+        self,
+        step: OptimizerStep,
+        tol: float=1e-5,
+        iters: int=100,
+        metric: Union[None, Callable]=None
+    ):
+        self.step = step
+        self.tol = tol
+        self.iters = iters
+        self.metric = metric
     
+    def __call__(
+        self, x_init: Union[Variable, VariableType], iters: None | int=None
+    ) -> Union[Variable, VariableType]:
+        return self.run(x_init, iters)
+        
+
+
+# class GradientDescent:
+#     def __init__(
+#         self,
+#         stepsize: torch.Tensor,
+#         grad_map_prm: Callable,
+#         tol: float=1e-5,
+#         iters: int=100,
+#         metric: Union[None, str, Callable]=None
+#     ):
+#         tracking = metric == "default"
+#         param_step = GDMarkovParamStep(
+#             stepsize, grad_map_prm, tracking=tracking
+#         )

@@ -15,7 +15,7 @@ class Optimizer:
         step: OptimizerStep,
         tol: float=1e-5,
         iters: int=100,
-        metric: None | Callable=None,
+        metric: Union[None, Callable]=None,
         store_history: bool=False,
         verbose: bool=False
     ):

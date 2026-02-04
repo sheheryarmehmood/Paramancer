@@ -4,9 +4,6 @@ from typing import Union, Tuple, Callable, Any
 from paramancer.optim.variable import TensorLike, Variable
 
 
-
-
-
 FlatParameter = TensorLike
 TupleParameter = Tuple[TensorLike, ...]
 ParameterType = Union[FlatParameter, TupleParameter]

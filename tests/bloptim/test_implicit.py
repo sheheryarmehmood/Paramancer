@@ -2,7 +2,7 @@ import torch
 import torch.autograd.functional as agF
 import torch.linalg as la
 
-from paramancer.bloptim.param_step import GDMarkovParamStep
+from paramancer.bloptim.step import GDMarkovParamStep
 from paramancer.bloptim import ImplicitDifferentiation
 
 

@@ -4,10 +4,11 @@ from typing import Union, Tuple
 import torch
 from enum import Enum
 
+
 # Types allowed for Variable construction
 TensorLike = torch.Tensor
 FlatVariable = TensorLike
-TupleVariable = Tuple[TensorLike, ...]
+TupleVariable = Tuple[FlatVariable, ...]
 NestedVariable = Tuple[TupleVariable, TupleVariable]
 VariableType = Union[FlatVariable, TupleVariable, NestedVariable]
 
@@ -25,6 +26,7 @@ class Variable:
 
     def __init__(self, data: VariableType, level="lower"):
         self._data = data
+        self._level = level
 
     # ------------------------
     # Utility: recursive apply
@@ -163,5 +165,15 @@ class Variable:
         dual: Union[VariableType, Variable]
     ) -> Variable:
         return Variable._from_pair(primal, dual)
+    
+    
+    def flatten(self) -> Union[Tuple[TensorLike, ...], Tuple[int]]:
+        pass
+    
+    @staticmethod
+    def unflatten(
+        collection: Tuple[TensorLike, ...], spec: Tuple[int]
+    ) -> Variable:
+        pass
 
 
