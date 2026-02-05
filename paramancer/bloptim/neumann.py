@@ -1,14 +1,14 @@
 import torch
-from typing import Callable
+from typing import Callable, Union
 from paramancer.optim.step import AffineStep
 from paramancer.optim import Optimizer
-from paramancer.optim.variable import Variable
+from paramancer.optim.variable import Variable, VariableType
 
 class NeumannSeries(Optimizer):
     def __init__(
         self,
         operator: Callable,
-        vector: torch.Tensor,
+        vector: Union[Variable, VariableType],
         tol: float=1e-5,
         iters: int=100,
         metric: None | str | Callable=None,

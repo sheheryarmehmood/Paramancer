@@ -7,6 +7,12 @@ from .variable import Variable, VariableType
 from paramancer.operators.linalg import adjoint
 
 
+MomentumSchedulerType = Callable[[], float]
+LineSearchSchedulerType = Callable[[VariableType, VariableType], float]
+StepsizeSchedulerTypes = Union[MomentumSchedulerType, LineSearchSchedulerType]
+GradMapType = Callable[[VariableType], VariableType]
+
+
 class MomentumType(Enum):
     Nesterov = "Nesterov"
     Polyak = "Polyak"
@@ -51,7 +57,7 @@ class MomentumStep(OptimizerStep):
         self,
         momentum: torch.Tensor,
         strategy: MomentumType=MomentumType.Nesterov,
-        momentum_scheduler: Union[None, Callable]=None
+        momentum_scheduler: Union[None, MomentumSchedulerType]=None
     ):
         super().__init__(tracking=False) # No tracking is needed.
         if not isinstance(strategy, MomentumType):
@@ -79,8 +85,8 @@ class GDStep(OptimizerStep):
     def __init__(
         self, 
         stepsize: torch.Tensor,
-        grad_map: Callable,
-        stepsize_scheduler: Union[None, Callable]=None,
+        grad_map: GradMapType,
+        stepsize_scheduler: Union[None, StepsizeSchedulerTypes]=None,
         linesearch=True,
         tracking: bool=False
     ):
@@ -110,7 +116,7 @@ class GDStep(OptimizerStep):
 class ProxStep(OptimizerStep):
     def __init__(
         self,
-        prox_map: Callable
+        prox_map: GradMapType
     ):
         super().__init__(tracking=False) # No tracking is needed.
         self.prox_map = Variable.wrap(prox_map)
@@ -142,7 +148,7 @@ class PolyakStep(OptimizerStep):
         self,
         stepsize: torch.Tensor,
         momentum: torch.Tensor,
-        grad_map: Callable,
+        grad_map: GradMapType,
         tracking: bool=False
     ):
         super().__init__(tracking=False) # Uses the tracking of GDStep
@@ -183,7 +189,7 @@ class NesterovStep(OptimizerStep):
     def __init__(
         self,
         stepsize: torch.Tensor,
-        grad_map: Callable,
+        grad_map: GradMapType,
         momentum_scheduler: Union[None, Callable]=None,
         tracking: bool=False
     ):
@@ -234,8 +240,8 @@ class ProxGradStep(OptimizerStep):
     def __init__(
         self,
         stepsize: torch.Tensor,
-        grad_map: Callable,
-        prox_map: Callable,
+        grad_map: GradMapType,
+        prox_map: GradMapType,
         tracking: bool=False
     ):
         super().__init__(tracking=tracking)
@@ -253,9 +259,9 @@ class FISTAStep(OptimizerStep):
     def __init__(
         self,
         stepsize: torch.Tensor,
-        grad_map: Callable,
-        prox_map: Callable,
-        momentum_scheduler: Union[None, Callable]=None,
+        grad_map: GradMapType,
+        prox_map: GradMapType,
+        momentum_scheduler: Union[None, MomentumSchedulerType]=None,
         tracking: bool=False
     ):
         super().__init__(tracking=False) # Uses the tracking of ProxGradStep
@@ -306,7 +312,7 @@ class PDHGPartialStep(OptimizerStep):
     def __init__(
         self,
         stepsize: torch.Tensor,
-        prox_map: Callable,
+        prox_map: GradMapType,
         lin_op: Callable
     ):
         super().__init__(tracking=False) # No tracking is needed.
@@ -335,8 +341,8 @@ class PDHGStep(OptimizerStep):
         self,
         stepsize_primal: torch.Tensor,
         stepsize_dual: torch.Tensor,
-        prox_map_primal: Callable,
-        prox_map_dual: Callable,
+        prox_map_primal: GradMapType,
+        prox_map_dual: GradMapType,
         lin_op: Callable,
         lin_op_adj: Callable=None,
         zero_el: Union[None, torch.Tensor, Tuple[torch.Tensor, ...]]=None,
