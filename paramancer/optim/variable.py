@@ -1,19 +1,9 @@
 from __future__ import annotations
 from functools import wraps
-from typing import Union, Tuple, Any
+from typing import Tuple, Any
 import torch
-from enum import Enum
 
-
-# Types allowed for Variable construction
-TensorLike = torch.Tensor
-FlatVariable = TensorLike
-TupleVariable = Tuple[FlatVariable, ...]
-NestedVariable = Tuple[TupleVariable, TupleVariable]
-
-VariableType = Union[FlatVariable, TupleVariable, NestedVariable]
-ApplyType = Tuple[TensorLike, ...]
-SpecType = Tuple[Any, ...]
+from .typing import VariableType, VariableLike, ApplyType, SpecType
 
 
 def _is_tensor(x: Any) -> bool:
@@ -126,9 +116,9 @@ class Variable:
     @staticmethod
     def unflatten(flat: ApplyType, spec: SpecType) -> VariableType:
         return unflatten(flat, spec)
-        
-        
-
+    
+    
+    
     # ------------------------
     # Utility: recursive apply
     # ------------------------
@@ -246,8 +236,8 @@ class Variable:
     
     @staticmethod
     def _from_pair(
-        var1: Union[VariableType, Variable],
-        var2: Union[VariableType, Variable]
+        var1: VariableLike,
+        var2: VariableLike
     ) -> Variable:
         v1 = var1.data if isinstance(var1, Variable) else var1
         v2 = var2.data if isinstance(var2, Variable) else var2
@@ -255,15 +245,15 @@ class Variable:
 
     @staticmethod
     def from_momentum(
-        curr: Union[VariableType, Variable],
-        prev: Union[VariableType, Variable]
+        curr: VariableLike,
+        prev: VariableLike
     ) -> Variable:
         return Variable._from_pair(curr, prev)
 
     @staticmethod
     def from_pdhg(
-        primal: Union[VariableType, Variable],
-        dual: Union[VariableType, Variable]
+        primal: VariableLike,
+        dual: VariableLike
     ) -> Variable:
         return Variable._from_pair(primal, dual)
 

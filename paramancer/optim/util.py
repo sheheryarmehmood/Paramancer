@@ -1,12 +1,15 @@
+from __future__ import annotations
 from dataclasses import dataclass
 import torch
-from typing import Optional, Union
-from paramancer.operators.norms import l2
+
+from typing import Optional
+from .typing import VariableLike
 
 
 @dataclass
 class OptimizationResult:
-    solution: Union[torch.Tensor, tuple[torch.Tensor]]
+    solution: VariableLike
     iterations: int
     metric: Optional[float]
     converged: bool
+

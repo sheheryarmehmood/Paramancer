@@ -1,13 +1,20 @@
+from __future__ import annotations
 import torch
 from tqdm import tqdm
-from typing import Callable, Tuple, Union
 
 
 from .variable import Variable, VariableType
-from .step import OptimizerStep
-from .step import GDStep, PolyakStep, NesterovStep
-from .step import ProxGradStep, FISTAStep, PDHGStep
+from .step import (
+    OptimizerStep,
+    GDStep, PolyakStep, NesterovStep,
+    ProxGradStep, FISTAStep, PDHGStep
+)
 from .util import OptimizationResult
+from .typing import (
+    GradMapType, ProxMapType, LinOpType,
+    MomentumSchedType, MetricFnType, MetricSpec,
+    ScalarLike, FlatVariable, TupleVariable, VariableLike
+)
 
 class Optimizer:
     def __init__(
@@ -15,7 +22,7 @@ class Optimizer:
         step: OptimizerStep,
         tol: float=1e-5,
         iters: int=100,
-        metric: Union[None, Callable]=None,
+        metric: MetricFnType = None,
         store_history: bool=False,
         verbose: bool=False
     ):
@@ -29,8 +36,8 @@ class Optimizer:
         self.result = None
     
     def __call__(
-        self, x_init: Union[Variable, VariableType], iters: None | int=None
-    ) -> Union[Variable, VariableType]:
+        self, x_init: VariableLike, iters: int | None = None
+    ) -> VariableLike:
         return self.run(x_init, iters)
     
     @Variable.ensure_var_input
@@ -82,11 +89,11 @@ class Optimizer:
 class GradientDescent(Optimizer):
     def __init__(
         self,
-        stepsize: torch.Tensor,
-        grad_map: Callable,
+        stepsize: ScalarLike,
+        grad_map: GradMapType,
         tol: float=1e-5,
         iters: int=100,
-        metric: None | str | Callable=None,
+        metric: MetricSpec = None,
         store_history: bool=False,
         verbose: bool=False
     ):
@@ -98,12 +105,12 @@ class GradientDescent(Optimizer):
 class HeavyBall(Optimizer):
     def __init__(
         self,
-        stepsize: torch.Tensor,
-        momentum: torch.Tensor,
-        grad_map: Callable,
+        stepsize: ScalarLike,
+        momentum: ScalarLike,
+        grad_map: GradMapType,
         tol: float=1e-5,
         iters: int=100,
-        metric: None | str | Callable=None,
+        metric: MetricSpec = None,
         store_history: bool=False,
         verbose: bool=False
     ):
@@ -117,11 +124,11 @@ class AcceleratedGradient(Optimizer):
     def __init__(
         self,
         stepsize,
-        grad_map,
-        momentum_scheduler: None | Callable=None,
+        grad_map: GradMapType,
+        momentum_scheduler: MomentumSchedType = None,
         tol: float=1e-5,
         iters: int=100,
-        metric: None | str | Callable=None,
+        metric: MetricSpec = None,
         store_history = False,
         verbose = False
     ):
@@ -139,12 +146,12 @@ class AcceleratedGradient(Optimizer):
 class ProximalGradient(Optimizer):
     def __init__(
         self,
-        stepsize: torch.Tensor,
-        grad_map: Callable,
-        prox_map: Callable,
+        stepsize: ScalarLike,
+        grad_map: GradMapType,
+        prox_map: ProxMapType,
         tol: float=1e-5,
         iters: int=100,
-        metric: None | str | Callable=None,
+        metric: MetricSpec = None,
         store_history = False,
         verbose = False
     ):
@@ -158,13 +165,13 @@ class ProximalGradient(Optimizer):
 class FISTA(Optimizer):
     def __init__(
         self,
-        stepsize: torch.Tensor,
-        grad_map: Callable,
-        prox_map: Callable,
-        momentum_scheduler: None | Callable=None,
+        stepsize: ScalarLike,
+        grad_map: GradMapType,
+        prox_map: ProxMapType,
+        momentum_scheduler: MomentumSchedType = None,
         tol: float=1e-5,
         iters: int=100,
-        metric: None | str | Callable=None,
+        metric: MetricSpec = None,
         store_history = False,
         verbose = False
     ):
@@ -182,16 +189,16 @@ class FISTA(Optimizer):
 class PDHG(Optimizer):
     def __init__(
         self,
-        stepsize_primal: torch.Tensor,
-        stepsize_dual: torch.Tensor,
-        prox_map_primal: Callable,
-        prox_map_dual: Callable,
-        lin_op: Callable,
-        lin_op_adj: Callable=None,
-        zero_el: Union[None, torch.Tensor, Tuple[torch.Tensor, ...]]=None,
+        stepsize_primal: ScalarLike,
+        stepsize_dual: ScalarLike,
+        prox_map_primal: ProxMapType,
+        prox_map_dual: ProxMapType,
+        lin_op: LinOpType,
+        lin_op_adj: LinOpType | None = None,
+        zero_el: FlatVariable | TupleVariable | None = None,
         tol: float=1e-5,
         iters: int=100,
-        metric: None | str | Callable=None,
+        metric: MetricSpec = None,
         store_history = False,
         verbose = False
     ):

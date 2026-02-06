@@ -1,6 +1,6 @@
+from __future__ import annotations
 import torch
-from typing import Callable, Union
-from .variable import VariableType
+
 
 class MomentumScheduler:
     def __init__(self):
