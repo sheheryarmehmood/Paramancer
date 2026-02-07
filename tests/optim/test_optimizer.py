@@ -4,7 +4,7 @@ import torch.linalg as la
 import pytest
 from paramancer.operators.norms import l2
 from paramancer.optim import GradientDescent, HeavyBall, AcceleratedGradient
-from paramancer.optim import ProximalGradient, FISTA
+from paramancer.optim import ProximalGradient, FISTA, PDHG
 
 
 # Testing Gradient Descent and Heavy-ball
@@ -121,5 +121,39 @@ def test_nag_with_gradient_metric():
     # For that many iterations, the algorithm should converge
     assert nag_optim.result.converged
     assert torch.allclose(x_nag, xm, atol=1e-4)
+
+
+def test_pdhg():
+    M = N = 2
+    A, b = torch.rand(M, N), torch.randn(M)
+    D1, D2 = torch.rand(2, 2), torch.rand(2, 2)
+    reg = torch.tensor(0.2)
     
+    K = torch.cat([D1, D2], dim=0)
+    K_norm = la.matrix_norm(K, ord=2)
+    ss_p = 0.9 / K_norm
+    ss_d = 0.9 / K_norm
+    
+    ATA = A.T @ A
+    ATb = A.T @ b
+    eye = torch.eye(N)
+    DTD = D1.T @ D1 + D2.T @ D2
+    
+    def prox_primal(x):
+        return la.solve(eye + ss_p * ATA, x + ss_p * ATb)
+    def prox_dual(y):
+        return y / (1 + ss_d / reg)
+    def lin_op(x):
+        return torch.stack([D1 @ x, D2 @ x])
+    def lin_op_adj(y):
+        return D1.T @ y[0] + D2.T @ y[1]
+    
+    xm = la.solve(ATA + reg * DTD, ATb)
+    
+    pdhg = PDHG(ss_p, ss_d, prox_primal, prox_dual, lin_op, lin_op_adj)
+    x_init = torch.randn(N)
+    y_init = torch.zeros_like(lin_op(x_init))
+    xm_pdhg, _ = pdhg(x_init, y_init, iters=5000)
+    
+    assert torch.allclose(xm, xm_pdhg, rtol=1e-3, atol=1e-5)
     

@@ -6,7 +6,7 @@ import abc
 from .variable import Variable
 from .scheduler import MomentumScheduler
 from paramancer.operators.linalg import adjoint
-from .typing import (
+from .types import (
     GradMapType, ProxMapType, LinOpType,
     MomentumSchedType, StepsizeSchedTypes,
     ScalarLike, FlatVariable, TupleVariable, VariableType, VariableLike
@@ -18,7 +18,7 @@ class MomentumType(Enum):
     Polyak = "Polyak"
 
 class OptimizerStep(abc.ABC):
-    def __init__(self, tracking: bool=False):
+    def __init__(self, tracking: bool = False):
         self._residual_tracking = tracking
         if self._residual_tracking:
             self._residual = None
@@ -57,7 +57,7 @@ class MomentumStep(OptimizerStep):
         self,
         momentum: ScalarLike,
         strategy: MomentumType = MomentumType.Nesterov,
-        momentum_scheduler: MomentumSchedType = None
+        momentum_scheduler: MomentumSchedType | None = None
     ):
         super().__init__(tracking=False) # No tracking is needed.
         if not isinstance(strategy, MomentumType):
@@ -86,9 +86,9 @@ class GDStep(OptimizerStep):
         self, 
         stepsize: ScalarLike,
         grad_map: GradMapType,
-        stepsize_scheduler: StepsizeSchedTypes = None,
-        linesearch=True,
-        tracking: bool=False
+        stepsize_scheduler: StepsizeSchedTypes | None = None,
+        linesearch = True,
+        tracking: bool = False
     ):
         super().__init__(tracking=tracking)
         self.stepsize = stepsize
@@ -130,15 +130,15 @@ class AffineStep(OptimizerStep):
         self,
         lin_op: LinOpType,
         vector: VariableType,
-        residual_tracking: bool=False
+        tracking: bool = False
     ):
-        super().__init__(tracking=residual_tracking)
-        self.operator = Variable.wrap(lin_op)
+        super().__init__(tracking=tracking)
+        self.lin_op = Variable.wrap(lin_op)
         self.vector = Variable(vector)
     
     @Variable.ensure_var_input
     def step(self, x_curr: Variable) -> Variable:
-        x_new = self.operator(x_curr) + self.vector
+        x_new = self.lin_op(x_curr) + self.vector
         if self._residual_tracking:
             self._residual = x_new - x_curr
         return x_new
@@ -149,7 +149,7 @@ class PolyakStep(OptimizerStep):
         stepsize: ScalarLike,
         momentum: ScalarLike,
         grad_map: GradMapType,
-        tracking: bool=False
+        tracking: bool = False
     ):
         super().__init__(tracking=False) # Uses the tracking of GDStep
         self.gd_step = GDStep(stepsize, grad_map, tracking=tracking)
@@ -190,8 +190,8 @@ class NesterovStep(OptimizerStep):
         self,
         stepsize: ScalarLike,
         grad_map: GradMapType,
-        momentum_scheduler: MomentumSchedType = None,
-        tracking: bool=False
+        momentum_scheduler: MomentumSchedType | None = None,
+        tracking: bool = False
     ):
         super().__init__(tracking=False) # Uses the tracking of GDStep
         if momentum_scheduler is None:
@@ -242,7 +242,7 @@ class ProxGradStep(OptimizerStep):
         stepsize: ScalarLike,
         grad_map: GradMapType,
         prox_map: ProxMapType,
-        tracking: bool=False
+        tracking: bool = False
     ):
         super().__init__(tracking=tracking)
         self.gd_step = GDStep(stepsize, grad_map, tracking=False)
@@ -261,8 +261,8 @@ class FISTAStep(OptimizerStep):
         stepsize: ScalarLike,
         grad_map: GradMapType,
         prox_map: ProxMapType,
-        momentum_scheduler: MomentumSchedType = None,
-        tracking: bool=False
+        momentum_scheduler: MomentumSchedType | None = None,
+        tracking: bool = False
     ):
         super().__init__(tracking=False) # Uses the tracking of ProxGradStep
         if momentum_scheduler is None:
@@ -346,9 +346,9 @@ class PDHGStep(OptimizerStep):
         lin_op: LinOpType,
         lin_op_adj: LinOpType | None = None,
         zero_el: FlatVariable | TupleVariable | None = None,
-        residual_tracking: bool=False
+        tracking: bool = False
     ):
-        super().__init__(residual_tracking)
+        super().__init__(tracking)
         if lin_op_adj is None:
             lin_op_adj = self._setup_lin_op_adj(lin_op, zero_el)
         self.primal_step = PDHGPartialStep(

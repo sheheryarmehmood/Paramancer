@@ -9,17 +9,14 @@ if TYPE_CHECKING:
 
 
 
-TensorLike: TypeAlias = Tensor
-
-
 # Types allowed for Variable construction
-FlatVariable: TypeAlias = TensorLike
+FlatVariable: TypeAlias = Tensor
 TupleVariable: TypeAlias = Tuple[FlatVariable, ...]
 NestedVariable: TypeAlias = Tuple[TupleVariable, TupleVariable]
 VariableType: TypeAlias = FlatVariable | TupleVariable | NestedVariable
 
 VariableLike: TypeAlias = "VariableType | Variable"
-ScalarLike: TypeAlias = float | TensorLike
+ScalarLike: TypeAlias = float | Tensor
 
 
 # ---- Aliases for callables with various args and returns types ----
@@ -32,15 +29,15 @@ VarXVarToScal: TypeAlias = Callable[[VariableType, VariableType], ScalarLike]
 GradMapType: TypeAlias = VarToVar
 ProxMapType: TypeAlias = VarToVar
 LinOpType: TypeAlias = VarToVar
-MetricFnType: TypeAlias = None | VarToScal
+MetricFnType: TypeAlias = VarToScal
 
-MomentumSchedType: TypeAlias = None | VoidToScal
-LineSearchSchedType: TypeAlias = None | VarXVarToScal
+MomentumSchedType: TypeAlias = VoidToScal
+LineSearchSchedType: TypeAlias = VarXVarToScal
 
 MetricSpec: TypeAlias = Literal["default"] | MetricFnType
 StepsizeSchedTypes: TypeAlias = MomentumSchedType | LineSearchSchedType
 
 
 # for flattened variable to be passed to `OptimizerID.apply`
-ApplyType: TypeAlias = Tuple[TensorLike, ...]
+ApplyType: TypeAlias = Tuple[Tensor, ...]
 SpecType: TypeAlias = Tuple[Any, ...]

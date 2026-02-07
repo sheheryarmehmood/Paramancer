@@ -56,7 +56,7 @@ class ImplicitDifferentiation:
             operator = self._operator_non_markovian
             vector = self._xmin_grad, self._xmin_grad
         self._adjoint_state = neumann_series(
-            operator=operator, vector=vector, tol=self.tol, iters=self.iters, 
+            lin_op=operator, vector=vector, tol=self.tol, iters=self.iters, 
             metric=self.metric, verbose=self.verbose
         )
     

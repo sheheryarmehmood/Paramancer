@@ -4,3 +4,4 @@ from .optimizer import HeavyBall
 from .optimizer import AcceleratedGradient
 from .optimizer import ProximalGradient
 from .optimizer import FISTA
+from .optimizer import PDHG

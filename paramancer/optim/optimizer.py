@@ -1,5 +1,4 @@
 from __future__ import annotations
-import torch
 from tqdm import tqdm
 
 
@@ -9,8 +8,8 @@ from .step import (
     GDStep, PolyakStep, NesterovStep,
     ProxGradStep, FISTAStep, PDHGStep
 )
-from .util import OptimizationResult
-from .typing import (
+from .util import OptimizationResult, to_float_scalar
+from .types import (
     GradMapType, ProxMapType, LinOpType,
     MomentumSchedType, MetricFnType, MetricSpec,
     ScalarLike, FlatVariable, TupleVariable, VariableLike
@@ -20,16 +19,19 @@ class Optimizer:
     def __init__(
         self,
         step: OptimizerStep,
-        tol: float=1e-5,
-        iters: int=100,
-        metric: MetricFnType = None,
-        store_history: bool=False,
-        verbose: bool=False
+        tol: float = 1e-5,
+        iters: int = 100,
+        metric: MetricSpec | None = None,
+        store_history: bool = False,
+        verbose: bool = False
     ):
         self.step = step
         self.tol = tol
         self.iters = iters
-        self.metric = metric
+        if metric == "default":
+            self.metric = None
+        else:
+            self.metric = metric
         self.verbose = verbose
         self.store_history = store_history
         self.history = [] if store_history else None
@@ -41,7 +43,7 @@ class Optimizer:
         return self.run(x_init, iters)
     
     @Variable.ensure_var_input
-    def run(self, x_init: Variable, iters: None | int=None) -> Variable:
+    def run(self, x_init: Variable, iters: None | int = None) -> Variable:
         
         x_curr = x_init.clone()
         if self.store_history:
@@ -54,20 +56,21 @@ class Optimizer:
         pbar = range(self.iters)
         if self.verbose:
             pbar = tqdm(pbar)
+        metric_val = None
         for k in pbar:
             x_curr = self.step(x_curr)
             
             if self.store_history:
                 self.history.append(x_curr.clone())
             
-            if not self.metric and not self.step.residual_tracking:
+            if self.metric is None and not self.step.residual_tracking:
                 continue
             
             if self.step.residual_tracking:
                 # vvvvv torch.Tensor Operation vvvvv
-                metric_val = self.step.residual.norm()
+                metric_val = to_float_scalar(self.step.residual.norm())
             else:
-                metric_val = self.metric(x_curr.data)
+                metric_val = to_float_scalar(self.metric(x_curr.data))
 
             if self.verbose:
                 pbar.set_description(f"{metric_val:.6e}")
@@ -79,7 +82,7 @@ class Optimizer:
         self.result = OptimizationResult(
             solution=x_curr,
             iterations=k + 1,
-            metric=metric_val if self.metric else None,
+            metric=metric_val,
             converged=converged
         )
 
@@ -91,11 +94,11 @@ class GradientDescent(Optimizer):
         self,
         stepsize: ScalarLike,
         grad_map: GradMapType,
-        tol: float=1e-5,
-        iters: int=100,
-        metric: MetricSpec = None,
-        store_history: bool=False,
-        verbose: bool=False
+        tol: float = 1e-5,
+        iters: int = 100,
+        metric: MetricSpec | None = None,
+        store_history: bool = False,
+        verbose: bool = False
     ):
         tracking = metric == "default"
         step = GDStep(stepsize, grad_map, tracking=tracking)
@@ -108,11 +111,11 @@ class HeavyBall(Optimizer):
         stepsize: ScalarLike,
         momentum: ScalarLike,
         grad_map: GradMapType,
-        tol: float=1e-5,
-        iters: int=100,
-        metric: MetricSpec = None,
-        store_history: bool=False,
-        verbose: bool=False
+        tol: float = 1e-5,
+        iters: int = 100,
+        metric: MetricSpec | None = None,
+        store_history: bool = False,
+        verbose: bool = False
     ):
         tracking = metric == "default"
         step = PolyakStep(
@@ -125,12 +128,12 @@ class AcceleratedGradient(Optimizer):
         self,
         stepsize,
         grad_map: GradMapType,
-        momentum_scheduler: MomentumSchedType = None,
-        tol: float=1e-5,
-        iters: int=100,
-        metric: MetricSpec = None,
-        store_history = False,
-        verbose = False
+        momentum_scheduler: MomentumSchedType | None = None,
+        tol: float = 1e-5,
+        iters: int = 100,
+        metric: MetricSpec | None = None,
+        store_history: bool = False,
+        verbose: bool = False
     ):
         tracking = metric == "default"
         step = NesterovStep(
@@ -149,11 +152,11 @@ class ProximalGradient(Optimizer):
         stepsize: ScalarLike,
         grad_map: GradMapType,
         prox_map: ProxMapType,
-        tol: float=1e-5,
-        iters: int=100,
-        metric: MetricSpec = None,
-        store_history = False,
-        verbose = False
+        tol: float = 1e-5,
+        iters: int = 100,
+        metric: MetricSpec | None = None,
+        store_history: bool = False,
+        verbose: bool = False
     ):
         tracking = metric == "default"
         step = ProxGradStep(
@@ -168,12 +171,12 @@ class FISTA(Optimizer):
         stepsize: ScalarLike,
         grad_map: GradMapType,
         prox_map: ProxMapType,
-        momentum_scheduler: MomentumSchedType = None,
-        tol: float=1e-5,
-        iters: int=100,
-        metric: MetricSpec = None,
-        store_history = False,
-        verbose = False
+        momentum_scheduler: MomentumSchedType | None = None,
+        tol: float = 1e-5,
+        iters: int = 100,
+        metric: MetricSpec | None = None,
+        store_history: bool = False,
+        verbose: bool = False
     ):
         tracking = metric == "default"
         step = FISTAStep(
@@ -196,11 +199,11 @@ class PDHG(Optimizer):
         lin_op: LinOpType,
         lin_op_adj: LinOpType | None = None,
         zero_el: FlatVariable | TupleVariable | None = None,
-        tol: float=1e-5,
-        iters: int=100,
-        metric: MetricSpec = None,
-        store_history = False,
-        verbose = False
+        tol: float = 1e-5,
+        iters: int = 100,
+        metric: MetricSpec | None = None,
+        store_history: bool = False,
+        verbose: bool = False
     ):
         """Eactly one out of `zero_el` and `lin_op_adj` should be `None`.
         """
@@ -209,4 +212,13 @@ class PDHG(Optimizer):
             lin_op, lin_op_adj, zero_el, tracking=(metric == "default")
         )
         super().__init__(step, tol, iters, metric, store_history, verbose)
+    
+    def __call__(
+        self,
+        x_init_primal: VariableLike,
+        x_init_dual: VariableLike,
+        iters: int | None = None
+    ) -> VariableLike:
+        x_init = Variable.from_pdhg(x_init_primal, x_init_dual)
+        return self.run(x_init, iters)
 
