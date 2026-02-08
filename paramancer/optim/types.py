@@ -13,26 +13,28 @@ if TYPE_CHECKING:
 FlatVariable: TypeAlias = Tensor
 TupleVariable: TypeAlias = Tuple[FlatVariable, ...]
 NestedVariable: TypeAlias = Tuple[TupleVariable, TupleVariable]
-VariableType: TypeAlias = FlatVariable | TupleVariable | NestedVariable
+BaseVariableType: TypeAlias = FlatVariable | TupleVariable
+VariableType: TypeAlias = BaseVariableType | NestedVariable
 
+BaseVariableLike: TypeAlias = "BaseVariableType | Variable"
 VariableLike: TypeAlias = "VariableType | Variable"
 ScalarLike: TypeAlias = float | Tensor
 
 
 # ---- Aliases for callables with various args and returns types ----
-VarToVar: TypeAlias = Callable[[VariableType], VariableType]
+BVarToBVar: TypeAlias = Callable[[BaseVariableType], BaseVariableType]
 VoidToScal: TypeAlias = Callable[[], ScalarLike]
 VarToScal: TypeAlias = Callable[[VariableType], ScalarLike]
-VarXVarToScal: TypeAlias = Callable[[VariableType, VariableType], ScalarLike]
+BVarXBVarToScal: TypeAlias = Callable[[VariableType, VariableType], ScalarLike]
 
 # ---- Common function types used across paramancer ----
-GradMapType: TypeAlias = VarToVar
-ProxMapType: TypeAlias = VarToVar
-LinOpType: TypeAlias = VarToVar
+GradMapType: TypeAlias = BVarToBVar
+ProxMapType: TypeAlias = BVarToBVar
+LinOpType: TypeAlias = BVarToBVar
 MetricFnType: TypeAlias = VarToScal
 
 MomentumSchedType: TypeAlias = VoidToScal
-LineSearchSchedType: TypeAlias = VarXVarToScal
+LineSearchSchedType: TypeAlias = BVarXBVarToScal
 
 MetricSpec: TypeAlias = Literal["default"] | MetricFnType
 StepsizeSchedTypes: TypeAlias = MomentumSchedType | LineSearchSchedType
@@ -40,4 +42,4 @@ StepsizeSchedTypes: TypeAlias = MomentumSchedType | LineSearchSchedType
 
 # for flattened variable to be passed to `OptimizerID.apply`
 ApplyType: TypeAlias = Tuple[Tensor, ...]
-SpecType: TypeAlias = Tuple[Any, ...]
+SpecType: TypeAlias = Tuple[str, ...]

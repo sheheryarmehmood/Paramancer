@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import torch
 
-from typing import Optional, Any, Tuple
+from typing import Any, Tuple
 from .types import VariableLike, ScalarLike, VariableType, ApplyType, SpecType
 
 

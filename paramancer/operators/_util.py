@@ -1,5 +1,5 @@
 from torch import Tensor
-from typing import Any, Callable, Tuple, Union
+from typing import Any, Callable, Tuple
 
 def dual(
     primal: Callable[..., Tensor],
@@ -23,8 +23,8 @@ def dual(
 
 
 def reduction_dims(
-    ndim: int, batch: Union[int, Tuple[int]]
-) -> Union[int, Tuple[int]]:
+    ndim: int, batch: int | Tuple[int]
+) -> int | Tuple[int]:
     """Given a tensor of dimension ndim, suppose that we want to perform an
     operation along the dimension given by dim. Then the dimensions given by
     batch will be preserved. This method does the conversion from batch to dim.

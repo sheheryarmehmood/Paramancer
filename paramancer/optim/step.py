@@ -1,5 +1,4 @@
 from __future__ import annotations
-import torch
 from enum import Enum
 import abc
 
@@ -9,7 +8,7 @@ from paramancer.operators.linalg import adjoint
 from .types import (
     GradMapType, ProxMapType, LinOpType,
     MomentumSchedType, StepsizeSchedTypes,
-    ScalarLike, FlatVariable, TupleVariable, VariableType, VariableLike
+    ScalarLike, BaseVariableType, VariableLike
 )
 
 
@@ -129,7 +128,7 @@ class AffineStep(OptimizerStep):
     def __init__(
         self,
         lin_op: LinOpType,
-        vector: VariableType,
+        vector: BaseVariableType,
         tracking: bool = False
     ):
         super().__init__(tracking=tracking)
@@ -322,9 +321,9 @@ class PDHGPartialStep(OptimizerStep):
     
     def __call__(
         self,
-        inp_curr: VariableLike, 
-        oth_curr: VariableLike
-    ) -> VariableLike:
+        inp_curr: BaseVariableType, 
+        oth_curr: BaseVariableType
+    ) -> BaseVariableType:
         return self.step(inp_curr, oth_curr)
     
     @Variable.ensure_var_input
@@ -345,7 +344,7 @@ class PDHGStep(OptimizerStep):
         prox_map_dual: ProxMapType,
         lin_op: LinOpType,
         lin_op_adj: LinOpType | None = None,
-        zero_el: FlatVariable | TupleVariable | None = None,
+        zero_el: BaseVariableType | None = None,
         tracking: bool = False
     ):
         super().__init__(tracking)

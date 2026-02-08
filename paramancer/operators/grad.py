@@ -1,8 +1,8 @@
 import torch
-from typing import Callable
+from collections.abc import Callable
 
 
-def gradient(smooth: Callable, *dargs: int) -> Callable:
+def gradient(smooth: Callable, *dargs: int) -> Callable[..., float]:
     """
     Create a callable that computes the partial gradient of a smooth function.
     

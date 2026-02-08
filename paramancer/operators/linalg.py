@@ -1,11 +1,12 @@
 import torch
-from typing import Callable, Tuple, Union
+from collections.abc import Callable
 
+from ..optim.types import LinOpType, FlatVariable, TupleVariable
 
 
 def adjoint(
-    lin_op: Callable, zero_el: Union[torch.Tensor, Tuple[torch.Tensor]]
-) -> Callable:
+    lin_op: LinOpType, zero_el: FlatVariable | TupleVariable
+) -> LinOpType:
     """Returns the adjoint (transpose) of a given linear map.
 
     Given a linear map `lin_op` and a zero element from its input space,

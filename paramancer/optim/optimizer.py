@@ -11,7 +11,7 @@ from .step import (
 from .util import OptimizationResult, to_float_scalar
 from .types import (
     GradMapType, ProxMapType, LinOpType,
-    MomentumSchedType, MetricFnType, MetricSpec,
+    MomentumSchedType, MetricSpec,
     ScalarLike, FlatVariable, TupleVariable, VariableLike
 )
 
