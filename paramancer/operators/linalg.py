@@ -1,17 +1,17 @@
 import torch
 from collections.abc import Callable
 
-from ..optim.types import LinOpType, FlatVariable, TupleVariable
+from ..optim.types import LinOpType, BaseVariableType
 
 
 def adjoint(
-    lin_op: LinOpType, zero_el: FlatVariable | TupleVariable
+    lin_op: LinOpType, zero_el: BaseVariableType
 ) -> LinOpType:
     """Returns the adjoint (transpose) of a given linear map.
 
     Given a linear map `lin_op` and a zero element from its input space,
     this function constructs a callable that computes the adjoint map
-    using PyTorch's vector–Jacobian product (VJP).
+    using PyTorch's vector-Jacobian product (VJP).
 
     The zero element is used to determine the structure (type, shape, device)
     of the adjoint's domain and codomain.

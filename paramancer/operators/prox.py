@@ -4,8 +4,6 @@ from .norms import l2, l2_in
 from ._docstrings import prox_doc
 from ._util import dual
 
-from typing import Union, Tuple
-
 
 # %% Simple Vector Norms
 
@@ -39,7 +37,7 @@ def nuc_norm(p: torch.Tensor, scal: torch.Tensor) -> torch.Tensor:
 def l2_inf_ball(
     p: torch.Tensor,
     rad: torch.Tensor,
-    dim: Union[int, Tuple[int]],
+    dim: int | tuple[int, ...],
     keepdim: bool=False,
     eps: float=1e-8
 ) -> torch.Tensor:
@@ -49,7 +47,7 @@ def l2_inf_ball(
 def l2_l1_norm(
     p: torch.Tensor,
     scal: torch.Tensor,
-    dim: Union[int, Tuple[int]],
+    dim: int | tuple[int, ...],
     keepdim: bool=False,
     eps: float=1e-8
 ) -> torch.Tensor:

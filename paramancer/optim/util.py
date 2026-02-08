@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import torch
 
-from typing import Any, Tuple
+from typing import Any
 from .types import VariableLike, ScalarLike, VariableType, ApplyType, SpecType
 
 
@@ -32,7 +32,7 @@ def is_nested_variable(x: Any) -> bool:
 def is_valid_variable(x: Any) -> bool:
     return is_tensor(x) or is_tuple_of_tensors(x) or is_nested_variable(x)
 
-def flatten(data: VariableType) -> Tuple[ApplyType, SpecType]:
+def flatten(data: VariableType) -> tuple[ApplyType, SpecType]:
     """
     Flattens VariableType into a flat tuple of tensors plus a spec to reconstruct it.
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Literal, TypeAlias, Tuple, Any
+from typing import TYPE_CHECKING, Literal, TypeAlias
 from torch import Tensor
 
 if TYPE_CHECKING:
@@ -11,8 +11,8 @@ if TYPE_CHECKING:
 
 # Types allowed for Variable construction
 FlatVariable: TypeAlias = Tensor
-TupleVariable: TypeAlias = Tuple[FlatVariable, ...]
-NestedVariable: TypeAlias = Tuple[TupleVariable, TupleVariable]
+TupleVariable: TypeAlias = tuple[FlatVariable, ...]
+NestedVariable: TypeAlias = tuple[TupleVariable, TupleVariable]
 BaseVariableType: TypeAlias = FlatVariable | TupleVariable
 VariableType: TypeAlias = BaseVariableType | NestedVariable
 
@@ -41,5 +41,9 @@ StepsizeSchedTypes: TypeAlias = MomentumSchedType | LineSearchSchedType
 
 
 # for flattened variable to be passed to `OptimizerID.apply`
-ApplyType: TypeAlias = Tuple[Tensor, ...]
-SpecType: TypeAlias = Tuple[str, ...]
+ApplyType: TypeAlias = tuple[Tensor, ...]
+FlatSpec: TypeAlias = tuple[Literal["flat"]]
+TupleSpec: TypeAlias = tuple[Literal["tuple"], int]
+NestedSpec: TypeAlias = tuple[Literal["nested"], int, int]
+SpecType: TypeAlias = FlatSpec | TupleSpec | NestedSpec
+

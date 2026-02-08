@@ -1,6 +1,5 @@
 import torch
 import torch.linalg as la
-from typing import Union, Tuple
 from ._util import reduction_dims
 from ._docstrings import norm_doc
 
@@ -12,7 +11,7 @@ Definition of various (group) norms defined for tensors
 # %% Euclidean Inner Product
 
 def inner_product(
-    p: torch.Tensor, q: torch.Tensor, batch: Union[int, Tuple[int]] = -1
+    p: torch.Tensor, q: torch.Tensor, batch: int | tuple[int, ...] = -1
 ) -> torch.Tensor:
     return (p*q).sum(dim=reduction_dims(p.ndim, batch))
 
@@ -20,7 +19,7 @@ def inner_product(
 # %% Squared Euclidean Norm
 
 def l2_sq(
-    p: torch.Tensor, batch: Union[int, Tuple[int]] = -1
+    p: torch.Tensor, batch: int | tuple[int, ...] = -1
 ) -> torch.Tensor:
     return inner_product(p, p, batch=batch)
 
@@ -28,17 +27,17 @@ def l2_sq(
 # %% Simple Norms
 
 def l2(
-    p: torch.Tensor, batch: Union[int, Tuple[int]] = -1
+    p: torch.Tensor, batch: int | tuple[int, ...] = -1
 ) -> torch.Tensor:
     return la.vector_norm(p, ord=2, dim=reduction_dims(p.ndim, batch))
 
 def l1(
-    p: torch.Tensor, batch: Union[int, Tuple[int]] = -1
+    p: torch.Tensor, batch: int | tuple[int, ...] = -1
 ) -> torch.Tensor:
     return p.abs().sum(dim=reduction_dims(p.ndim, batch))
 
 def inf(
-    p: torch.Tensor, batch: Union[int, Tuple[int]] = -1
+    p: torch.Tensor, batch: int | tuple[int, ...] = -1
 ) -> torch.Tensor:
     return p.abs().amax(dim=reduction_dims(p.ndim, batch))
 
@@ -46,21 +45,21 @@ def inf(
 # %% Composite Vector Norms
 
 def l2_in(
-    p: torch.Tensor, dim: Union[int, Tuple[int]], keepdim: bool = False
+    p: torch.Tensor, dim: int | tuple[int, ...], keepdim: bool = False
 ) -> torch.Tensor:
     return la.vector_norm(p, ord=2, dim=dim, keepdim=keepdim)
 def l2_l1(
     p: torch.Tensor,
-    dim: Union[int, Tuple[int]],
-    batch: Union[int, Tuple[int]] = -1
+    dim: int | tuple[int, ...],
+    batch: int | tuple[int, ...] = -1
 ) -> torch.Tensor:
     q = l2_in(p, dim)
     return q.sum(dim=reduction_dims(q.ndim, batch))
 
 def l2_inf(
     p: torch.Tensor,
-    dim: Union[int, Tuple[int]],
-    batch: Union[int, Tuple[int]] = -1
+    dim: int | tuple[int, ...],
+    batch: int | tuple[int, ...] = -1
 ) -> torch.Tensor:
     q = l2_in(p, dim)
     return q.amax(dim=reduction_dims(q.ndim, batch))
@@ -71,7 +70,7 @@ def l2_inf(
 def nuc_in(p: torch.Tensor, keepdim: bool = False) -> torch.Tensor:
     return la.matrix_norm(p, ord='nuc', keepdim=keepdim)
 def nuc_l1(
-    p: torch.Tensor, batch: Union[int, Tuple[int]] = -1
+    p: torch.Tensor, batch: int | tuple[int, ...] = -1
 ) -> torch.Tensor:
     q = nuc_in(p)
     return q.sum(dim=reduction_dims(q.ndim, batch))
@@ -79,7 +78,7 @@ def nuc_l1(
 def spec_in(p: torch.Tensor, keepdim: bool = False) -> torch.Tensor:
     return la.matrix_norm(p, ord=2, keepdim=keepdim)
 def spec_inf(
-    p: torch.Tensor, batch: Union[int, Tuple[int]] = -1
+    p: torch.Tensor, batch: int | tuple[int, ...] = -1
 ) -> torch.Tensor:
     q = spec_in(p)
     return q.amax(dim=reduction_dims(q.ndim, batch))
