@@ -1,8 +1,44 @@
+from __future__ import annotations
 import torch
 from collections.abc import Callable
 
+from ..optim.variable import Variable
+from ..optim.util import flatten, unflatten
+from ..optim.types import BaseVariableType
+from ..bloptim.types import ParamObjType, ParamGradMapType
 
-def gradient(smooth: Callable, *dargs: int) -> Callable[..., float]:
+def gradient(
+    smooth: ParamObjType
+) -> ParamGradMapType:
+    def grad_s(x, u, *args):
+        x_was_var = isinstance(x, Variable)
+        x_data = x.data if x_was_var else x
+        x_flat, x_spec = flatten(x_data)
+
+        if isinstance(u, torch.nn.ParameterList):
+            u_flat = tuple(u)
+        else:
+            u_flat = (u,)
+
+        x_len = len(x_flat)
+
+        def smooth_flat(*flat_args):
+            x_args = flat_args[:x_len]
+            x_unflat = unflatten(x_args, x_spec)
+            x_in = Variable(x_unflat) if x_was_var else x_unflat
+            return smooth(x_in, u, *args)
+
+        grad_fn = _gradient(smooth_flat, *range(x_len))
+        gd = grad_fn(*x_flat, *u_flat, *args)
+        if not isinstance(gd, tuple):
+            gd = (gd,)
+        out = unflatten(gd, x_spec)
+        return Variable(out) if x_was_var else out
+    return grad_s
+
+def _gradient(
+    smooth: Callable[..., torch.Tensor], *dargs: int
+) -> Callable[..., BaseVariableType]:
     """
     Create a callable that computes the partial gradient of a smooth function.
     
@@ -10,7 +46,9 @@ def gradient(smooth: Callable, *dargs: int) -> Callable[..., float]:
     computes the gradient of `smooth` with respect to the arguments specified
     by `dargs`. Furthermore, the new function is also differentiable and can
     be used to compute the vector hessian products using backward() or any
-    other autograd module of torch.
+    other autograd module of torch. Important Note: All differentiable inputs 
+    are expected to be leaf tensors. Passing non-leaf tensors is unsupported 
+    and may raise an error.
     
     Args:
         smooth (Callable): Smooth, scalar-valued function. Supports batched

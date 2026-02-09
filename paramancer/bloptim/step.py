@@ -1,10 +1,10 @@
 import torch
 from typing import Callable, Union
-from paramancer.optim.variable import VariableType, Variable
-from paramancer.bloptim.parameter import ParameterType, Parameter
 
-from paramancer.optim.step import GDStep, PolyakStep, NesterovStep
-from paramancer.optim.step import ProxGradStep, FISTAStep
+from ..optim.variable import VariableType, Variable
+from ..bloptim.parameter import ParameterType, Parameter
+from ..optim.step import GDStep, PolyakStep, NesterovStep
+from ..optim.step import ProxGradStep, FISTAStep
 
 """
 `OptimizerStep` and its child classes are used to implement the following

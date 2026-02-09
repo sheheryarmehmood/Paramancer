@@ -1,9 +1,10 @@
 import torch
 import torch.autograd.functional as agF
 import torch.linalg as la
+import pytest
 
 from paramancer.bloptim.step import GDMarkovParamStep
-from paramancer.bloptim import ImplicitDifferentiation
+from paramancer.bloptim.implicit import ImplicitDifferentiation
 
 
 def test_implicit():

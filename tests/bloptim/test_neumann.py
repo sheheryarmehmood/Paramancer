@@ -1,6 +1,8 @@
 import torch
 import torch.linalg as la
-from paramancer.bloptim import neumann_series
+import pytest
+
+from paramancer.bloptim.neumann import neumann_series
 
 
 def test_neumann_nxn():

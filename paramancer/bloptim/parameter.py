@@ -1,7 +1,8 @@
 from functools import wraps
 import torch
 from typing import Union, Tuple, Callable, Any
-from paramancer.optim.variable import TensorLike, Variable
+
+from ..optim.variable import TensorLike, Variable
 
 
 FlatParameter = TensorLike

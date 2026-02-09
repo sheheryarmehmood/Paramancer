@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import torch
 
-from paramancer.optim.step import AffineStep
-from paramancer.optim import Optimizer
-from paramancer.optim.types import VariableLike, MetricSpec, LinOpType
+from ..optim.optimizer import Optimizer
+from ..optim.step import AffineStep
+from ..optim.types import VariableLike, MetricSpec, LinOpType
 
 class NeumannSeries(Optimizer):
     def __init__(

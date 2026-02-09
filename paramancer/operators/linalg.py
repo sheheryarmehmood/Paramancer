@@ -1,5 +1,5 @@
+from __future__ import annotations
 import torch
-from collections.abc import Callable
 
 from ..optim.types import LinOpType, BaseVariableType
 
@@ -52,7 +52,7 @@ def adjoint(
         zero_el = zero_el.clone().detach()
     def lin_op_adj(inps, *params):
         inputs = inps + params if isinstance(inps, tuple) else (inps, *params)
-        create_graph = True in [inp.requires_grad for inp in inputs]
+        create_graph = any(inp.requires_grad for inp in inputs)
         return torch.autograd.functional.vjp(
             lambda *zl: lin_op(*zl, *params), zero_el, inps,
             create_graph=create_graph

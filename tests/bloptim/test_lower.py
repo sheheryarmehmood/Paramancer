@@ -1,6 +1,8 @@
 import torch
 import torch.linalg as la
 import torch.autograd.functional as agF
+import pytest
+
 from paramancer.bloptim.lower import OptimizerID
 from paramancer.bloptim.step import GDMarkovParamStep, PolyakMarkovParamStep
 

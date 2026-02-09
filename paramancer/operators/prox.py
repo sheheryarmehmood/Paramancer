@@ -1,5 +1,7 @@
+from __future__ import annotations
 import torch
 import torch.linalg as la
+
 from .norms import l2, l2_in
 from ._docstrings import prox_doc
 from ._util import dual
@@ -16,7 +18,7 @@ def l1_norm(p: torch.Tensor, scal: torch.Tensor) -> torch.Tensor:
 def l2_ball(
     p: torch.Tensor, rad: torch.Tensor, eps: float=1e-8
 ) -> torch.Tensor:
-    return p / max(1., l2(p) / rad + eps)
+    return p / torch.maximum(1., l2(p) / rad + eps)
 def l2_norm(
     p: torch.Tensor, scal: torch.Tensor, eps: float=1e-8
 ) -> torch.Tensor:

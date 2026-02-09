@@ -4,7 +4,7 @@ import abc
 
 from .variable import Variable
 from .scheduler import MomentumScheduler
-from paramancer.operators.linalg import adjoint
+from ..operators.linalg import adjoint
 from .types import (
     GradMapType, ProxMapType, LinOpType,
     MomentumSchedType, StepsizeSchedTypes,

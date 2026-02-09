@@ -1,12 +1,14 @@
 import torch
-from paramancer.optim.step import OptimizerStep
-from paramancer.optim import Optimizer
+from typing import Callable, Union, Tuple
+
+
+from ..optim.step import OptimizerStep
+from ..optim.optimizer import Optimizer
 from .implicit import ImplicitDifferentiation
 from .step import GDMarkovParamStep
 from .parameter import ParameterType, Parameter
 from ..optim.variable import Variable, VariableType
 
-from typing import Callable, Union, Tuple
 
 class OptimizerID(torch.autograd.Function):
     @staticmethod

@@ -1,8 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import torch
-
 from typing import Any
+
 from .types import VariableLike, ScalarLike, VariableType, ApplyType, SpecType
 
 

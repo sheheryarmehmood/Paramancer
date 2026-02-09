@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Literal, TypeAlias
 from torch import Tensor
@@ -21,13 +20,13 @@ VariableLike: TypeAlias = "VariableType | Variable"
 ScalarLike: TypeAlias = float | Tensor
 
 
-# ---- Aliases for callables with various args and returns types ----
+# Aliases for callables with various args and returns types
 BVarToBVar: TypeAlias = Callable[[BaseVariableType], BaseVariableType]
 VoidToScal: TypeAlias = Callable[[], ScalarLike]
 VarToScal: TypeAlias = Callable[[VariableType], ScalarLike]
 BVarXBVarToScal: TypeAlias = Callable[[VariableType, VariableType], ScalarLike]
 
-# ---- Common function types used across paramancer ----
+# Common function types used across paramancer
 GradMapType: TypeAlias = BVarToBVar
 ProxMapType: TypeAlias = BVarToBVar
 LinOpType: TypeAlias = BVarToBVar

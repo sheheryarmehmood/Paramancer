@@ -1,7 +1,6 @@
 from __future__ import annotations
 from tqdm import tqdm
 
-
 from .variable import Variable, VariableType
 from .step import (
     OptimizerStep,

@@ -1,5 +1,7 @@
+from __future__ import annotations
 import torch
 import torch.linalg as la
+
 from ._util import reduction_dims
 from ._docstrings import norm_doc
 
@@ -95,6 +97,6 @@ l2_l1.__doc__ = norm_doc("composite Euclidean-l1", group_l2=True)
 l2_inf.__doc__ = norm_doc("composite Euclidean-infinity", group_l2=True)
 nuc_in.__doc__ = norm_doc("nuclear", inner=True)
 nuc_l1.__doc__ = norm_doc("composite nuclear-l1")
-nuc_in.__doc__ = norm_doc("spectral", inner=True)
+spec_in.__doc__ = norm_doc("spectral", inner=True)
 spec_inf.__doc__ = norm_doc("composite spectral-infinity")
 
