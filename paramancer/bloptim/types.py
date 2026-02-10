@@ -16,17 +16,21 @@ ParameterType = FlatParameter | TupleParameter
 P = ParamSpec("P")
 
 # Aliases for callables with various args and returns types ----
-BVarXPrmToTen: TypeAlias = Callable[
+BVarXPrmXAnyToTen: TypeAlias = Callable[
     Concatenate[BaseVariableLike, ParameterType, P], Tensor
 ]
-BVarXPrmToBVar: TypeAlias = Callable[
+BVarXPrmXAnyToBVar: TypeAlias = Callable[
     Concatenate[BaseVariableLike, ParameterType, P], BaseVariableLike
 ]
-
+BVarXAnyToBVar: TypeAlias = Callable[
+    Concatenate[BaseVariableLike, P], BaseVariableLike
+]
 
 # Aliases for various parametric maps
-ParamObjType: TypeAlias = BVarXPrmToTen
-ParamGradMapType: TypeAlias = BVarXPrmToBVar
-ParamProxMapType: TypeAlias = BVarXPrmToBVar
-ParamLinOpType: TypeAlias = BVarXPrmToBVar
+ParamObjType: TypeAlias = BVarXPrmXAnyToTen
+ParamGradMapType: TypeAlias = BVarXPrmXAnyToBVar
+ParamProxMapType: TypeAlias = BVarXPrmXAnyToBVar
+ParamLinOpType: TypeAlias = BVarXAnyToBVar
 
+# Note: Perhaps we can split `ParamLinOpType` into `ParamLinOpType` and 
+# `ParamAdjLinOpType` by using `TypeVar` for Primal and Dual Space. 

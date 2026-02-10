@@ -1,12 +1,13 @@
 from __future__ import annotations
 import torch
 
-from ..optim.types import LinOpType, BaseVariableType
+from ..optim.types import BaseVariableType
+from ..bloptim.types import ParamLinOpType
 
 
 def adjoint(
-    lin_op: LinOpType, zero_el: BaseVariableType
-) -> LinOpType:
+    lin_op: ParamLinOpType, zero_el: BaseVariableType
+) -> ParamLinOpType:
     """Returns the adjoint (transpose) of a given linear map.
 
     Given a linear map `lin_op` and a zero element from its input space,

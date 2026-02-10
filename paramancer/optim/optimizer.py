@@ -1,10 +1,11 @@
 from __future__ import annotations
 from tqdm import tqdm
+import torch
 
-from .variable import Variable, VariableType
+from .variable import Variable
 from .step import (
     OptimizerStep,
-    GDStep, PolyakStep, NesterovStep,
+    AffineStep, GDStep, PolyakStep, NesterovStep,
     ProxGradStep, FISTAStep, PDHGStep
 )
 from .util import OptimizationResult, to_float_scalar
@@ -86,6 +87,29 @@ class Optimizer:
         )
 
         return x_curr
+
+
+class NeumannSeries(Optimizer):
+    def __init__(
+        self,
+        lin_op: LinOpType,
+        vector: VariableLike,
+        tol: float = 1e-5,
+        iters: int = 100,
+        metric: MetricSpec = None,
+        store_history: bool=False,
+        verbose: bool = False
+    ):
+        tracking = metric == "default"
+        step = AffineStep(lin_op, vector, tracking=tracking)
+        super().__init__(step, tol, iters, metric, store_history, verbose)
+    
+    def __call__(
+        self, init: VariableLike | None = None, iters: int | None = None
+    ) -> VariableLike:
+        if init is None:
+            init = torch.zeros_like(self.step.vector.data)
+        return self.run(init, iters)
 
 
 class GradientDescent(Optimizer):

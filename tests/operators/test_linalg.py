@@ -3,7 +3,7 @@ from paramancer.operators import adjoint
 import pytest
 
 
-def test_adjoint_single_input():
+def testadjoint_single_input():
     A = torch.tensor([[1., 2.], [3., 4.]])
     def lin_op(x): return A @ x
     zero_el = torch.zeros(2)
@@ -11,7 +11,7 @@ def test_adjoint_single_input():
     y = torch.tensor([1., 1.])
     assert torch.allclose(lin_op_adj(y), A.T @ y, atol=1e-5)
 
-def test_adjoint_multiple_input():
+def testadjoint_multiple_input():
     def lin_op(*args): return sum(args)
     num_inputs = 5
     input_size = 15
@@ -23,7 +23,7 @@ def test_adjoint_multiple_input():
         torch.allclose(x, y, atol=1e-5) for x, y in zip(adj_out, lin_op_adj(z))
     )
 
-def test_adjoint_differentiablity():
+def testadjoint_differentiablity():
     rows, cols = 15, 10
     A = torch.rand(rows, cols)
     def lin_op(x): return A @ x
@@ -39,7 +39,7 @@ def test_adjoint_differentiablity():
     assert torch.allclose(y.grad, A @ ones, atol=1e-5)
     assert torch.allclose(A.grad, torch.outer(y, ones), atol=1e-5)
 
-def test_parametric_adjoint():
+def test_parametricadjoint():
     rows, cols, cols1, cols2 = 15, 20, 10, 5
     A = torch.rand(rows, cols)
     A1 = torch.rand(rows, cols1)

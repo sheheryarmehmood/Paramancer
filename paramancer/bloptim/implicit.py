@@ -2,7 +2,7 @@ import torch
 import torch.autograd.functional as agF
 from typing import Callable, Union, Tuple
 
-from ..optim.variable import Variable, VariableType
+# from ..optim.variable import Variable, VariableType
 from ..bloptim.neumann import neumann_series
 from ..optim.step import OptimizerStep
 
