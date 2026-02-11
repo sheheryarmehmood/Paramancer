@@ -9,7 +9,7 @@ from .step import (
     ProxGradStep, FISTAStep, PDHGStep
 )
 from .util import OptimizationResult, to_float_scalar
-from .types import (
+from ..types import (
     GradMapType, ProxMapType, LinOpType,
     MomentumSchedType, MetricSpec,
     ScalarLike, FlatVariable, TupleVariable, VariableLike
@@ -149,7 +149,7 @@ class HeavyBall(Optimizer):
 class AcceleratedGradient(Optimizer):
     def __init__(
         self,
-        stepsize,
+        stepsize: ScalarLike,
         grad_map: GradMapType,
         momentum_scheduler: MomentumSchedType | None = None,
         tol: float = 1e-5,

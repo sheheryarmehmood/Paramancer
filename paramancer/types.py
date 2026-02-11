@@ -1,11 +1,11 @@
 from __future__ import annotations
+
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Literal, TypeAlias
-from torch import Tensor
+from typing import TYPE_CHECKING, Literal, TypeAlias, ParamSpec, Concatenate
+from torch import Tensor, nn
 
 if TYPE_CHECKING:
-    from .variable import Variable
-
+    from .optim.variable import Variable
 
 
 # Types allowed for Variable construction
@@ -46,3 +46,27 @@ TupleSpec: TypeAlias = tuple[Literal["tuple"], int]
 NestedSpec: TypeAlias = tuple[Literal["nested"], int, int]
 SpecType: TypeAlias = FlatSpec | TupleSpec | NestedSpec
 
+
+# Types allowed for Parameter
+FlatParameter = nn.Parameter
+TupleParameter = nn.ParameterList
+ParameterType = FlatParameter | TupleParameter
+
+P = ParamSpec("P")
+
+# Aliases for callables with various args and returns types ----
+BVarXPrmXAnyToTen: TypeAlias = Callable[
+    Concatenate[BaseVariableLike, ParameterType, P], Tensor
+]
+BVarXPrmXAnyToBVar: TypeAlias = Callable[
+    Concatenate[BaseVariableLike, ParameterType, P], BaseVariableLike
+]
+BVarXAnyToBVar: TypeAlias = Callable[
+    Concatenate[BaseVariableLike, P], BaseVariableLike
+]
+
+# Aliases for various parametric maps
+ParamObjType: TypeAlias = BVarXPrmXAnyToTen
+ParamGradMapType: TypeAlias = BVarXPrmXAnyToBVar
+ParamProxMapType: TypeAlias = BVarXPrmXAnyToBVar
+ParamLinOpType: TypeAlias = BVarXAnyToBVar

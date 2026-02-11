@@ -4,8 +4,7 @@ from collections.abc import Callable
 
 from ..optim.variable import Variable
 from ..optim.util import flatten, unflatten
-from ..optim.types import BaseVariableType
-from ..bloptim.types import ParamObjType, ParamGradMapType
+from ..types import BaseVariableType, ParamObjType, ParamGradMapType
 
 def gradient(
     smooth: ParamObjType

@@ -5,7 +5,7 @@ import abc
 from .variable import Variable
 from .scheduler import MomentumScheduler
 from ..operators.linalg import adjoint
-from .types import (
+from ..types import (
     GradMapType, ProxMapType, LinOpType,
     MomentumSchedType, StepsizeSchedTypes,
     ScalarLike, BaseVariableType, VariableLike
@@ -86,7 +86,7 @@ class GDStep(OptimizerStep):
         stepsize: ScalarLike,
         grad_map: GradMapType,
         stepsize_scheduler: StepsizeSchedTypes | None = None,
-        linesearch = True,
+        linesearch: bool = True,
         tracking: bool = False
     ):
         super().__init__(tracking=tracking)
@@ -104,7 +104,7 @@ class GDStep(OptimizerStep):
             self._residual = x_new - x_curr
         return x_new
     
-    def _set_stepsize(self, x_curr: Variable, direction: Variable):
+    def _set_stepsize(self, x_curr: Variable, direction: Variable) -> None:
         if not self.stepsize_scheduler:
             return
         if self.linesearch:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ..optim.optimizer import NeumannSeries
-from ..optim.types import VariableLike, MetricSpec, LinOpType
+from ..types import VariableLike, MetricSpec, LinOpType
 
 
 def neumann_series(
