@@ -3,20 +3,35 @@ import torch
 from collections.abc import Callable
 
 from ..variable import Variable, flatten, unflatten
-from ..variable.types import BaseVariableType, ParamObjType, ParamGradMapType
+from ..variable.types import BaseVariableType, PObjType, PGradMapType, ParameterType
 
 def gradient(
-    smooth: ParamObjType
-) -> ParamGradMapType:
-    def grad_s(x, u, *args):
+    smooth: PObjType
+) -> PGradMapType:
+    """
+    Return a callable that differentiates `smooth` with respect to its first
+    argument (`BaseVariableLike`), including parametric objectives where the
+    first argument must not be a parameter.
+
+    If a parameter argument is of type `ParameterType`, or if the first
+    argument has `requires_grad=True`, the returned gradient function is itself
+    differentiable, enabling second-order derivatives with respect to those
+    arguments.
+    
+    This can be useful in differentiating non-parametric objectives as well as
+    lower level objectives which take additional parameters including the 
+    """
+
+    def grad_s(x, *args):
         x_was_var = isinstance(x, Variable)
         x_data = x.data if x_was_var else x
         x_flat, x_spec = flatten(x_data)
 
-        if isinstance(u, torch.nn.ParameterList):
-            u_flat = tuple(u)
-        else:
-            u_flat = (u,)
+        prm_flat = ()
+        if isinstance(args[0], ParameterType):
+            prm_flat = tuple(
+                args[0]) if isinstance(args[0], torch.nn.ParameterList
+            ) else (args[0],)
 
         x_len = len(x_flat)
 
@@ -24,10 +39,10 @@ def gradient(
             x_args = flat_args[:x_len]
             x_unflat = unflatten(x_args, x_spec)
             x_in = Variable(x_unflat) if x_was_var else x_unflat
-            return smooth(x_in, u, *args)
+            return smooth(x_in, *args)
 
         grad_fn = _gradient(smooth_flat, *range(x_len))
-        gd = grad_fn(*x_flat, *u_flat, *args)
+        gd = grad_fn(*x_flat, *prm_flat, *args)
         if not isinstance(gd, tuple):
             gd = (gd,)
         out = unflatten(gd, x_spec)
@@ -77,7 +92,9 @@ def _gradient(
     def grad_s(*args):
         inps = [args[i] for i in dargs] if dargs else [args[0]]
         rgs = [inp.requires_grad for inp in inps]
-        create_graph = any(arg.requires_grad for arg in args)
+        create_graph = any(
+            getattr(arg, "requires_grad", False) for arg in args
+        )
         
         # Temporarily enable requires_grad for inputs if needed
         for inp, rg in zip(inps, rgs):

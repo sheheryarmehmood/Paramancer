@@ -61,6 +61,9 @@ BVarXPrmXAnyToTen: TypeAlias = Callable[
 BVarXPrmXAnyToBVar: TypeAlias = Callable[
     Concatenate[BaseVariableLike, ParameterType, P], BaseVariableLike
 ]
+BVarXAnyToTen: TypeAlias = Callable[
+    Concatenate[BaseVariableLike, P], Tensor
+]
 BVarXAnyToBVar: TypeAlias = Callable[
     Concatenate[BaseVariableLike, P], BaseVariableLike
 ]
@@ -69,4 +72,7 @@ BVarXAnyToBVar: TypeAlias = Callable[
 ParamObjType: TypeAlias = BVarXPrmXAnyToTen
 ParamGradMapType: TypeAlias = BVarXPrmXAnyToBVar
 ParamProxMapType: TypeAlias = BVarXPrmXAnyToBVar
-ParamLinOpType: TypeAlias = BVarXAnyToBVar
+# vvvvv Generic aliases (Param* aliases are stricter specializations of these)
+PObjType: TypeAlias = BVarXAnyToTen
+PGradMapType: TypeAlias = BVarXAnyToBVar
+PLinOpType: TypeAlias = BVarXAnyToBVar

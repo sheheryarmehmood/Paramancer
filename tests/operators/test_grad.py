@@ -8,27 +8,42 @@ from paramancer.operators.norms import inner_product, l2_sq
 
 
 def test_gradient():
-    def smooth(x, u):
+    def smooth(x, u, a1, a2): # a1 and a2 can be non-tensors
         x_data = x.data if isinstance(x, Variable) else x
         x1, x2 = x_data
-        return 0.5 * l2_sq(x1) + inner_product(x2, u)
-    
-    x1 = torch.randn(5)
-    x2 = torch.randn(7)
-    u = torch.randn(7)
-    
+        u1, u2 = u
+        return 0.5 * a1 * u2.sum() * l2_sq(x1) + a2 * inner_product(x2, u1)
     grad_fn = gradient(smooth)
-    gd = grad_fn((x1, x2), u)
     
-    assert torch.allclose(gd[0], x1)
-    assert torch.allclose(gd[1], u)
+    x1, x2 = torch.randn(5), torch.randn(7)
+    u1, u2 = torch.randn(7), torch.randn(10)
+    a1, a2 = 4, 10
     
-    x_var = Variable((x1, x2))
-    gd_var = grad_fn(x_var, u)
+    x = (x1, x2)
+    u = (u1, u2)
+    
+    gd = grad_fn(x, u, a1, a2)
+    
+    assert torch.allclose(gd[0], a1 * u2.sum() * x1)
+    assert torch.allclose(gd[1], a2 * u1)
+    
+    x_var = Variable(x)
+    gd_var = grad_fn(x_var, u, a1, a2)
     
     assert isinstance(gd_var, Variable)
-    assert torch.allclose(gd_var.data[0], x1)
-    assert torch.allclose(gd_var.data[1], u)
+    assert torch.allclose(gd_var.data[0], a1 * u2.sum() * x1)
+    assert torch.allclose(gd_var.data[1], a2 * u1)
+    
+    u_par = torch.nn.ParameterList(u)
+    x1.requires_grad = True     # x_var should get updated automatically?
+    gd_var = grad_fn(x_var, u_par, a1, a2)
+    sum(tuple(g.sum() for g in gd_var.data)).backward()
+    
+    assert torch.allclose(
+        x_var.data[0].grad, a1 * u2.sum() * torch.ones_like(x1)
+    )
+    assert torch.allclose(u_par[0].grad, a2 * torch.ones_like(u1))
+    assert torch.allclose(u_par[1].grad, a1 * x1.sum() * torch.ones_like(u2))
 
 
 def test_backend_gradient():
