@@ -2,9 +2,8 @@ from __future__ import annotations
 import torch
 from collections.abc import Callable
 
-from ..optim.variable import Variable
-from ..optim.util import flatten, unflatten
-from ..types import BaseVariableType, ParamObjType, ParamGradMapType
+from ..variable import Variable, flatten, unflatten
+from ..variable.types import BaseVariableType, ParamObjType, ParamGradMapType
 
 def gradient(
     smooth: ParamObjType

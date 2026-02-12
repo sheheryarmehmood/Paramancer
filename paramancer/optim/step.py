@@ -2,10 +2,10 @@ from __future__ import annotations
 from enum import Enum
 import abc
 
-from .variable import Variable
+from ..variable import Variable
 from .scheduler import MomentumScheduler
 from ..operators.linalg import adjoint
-from ..types import (
+from ..variable.types import (
     GradMapType, ProxMapType, LinOpType,
     MomentumSchedType, StepsizeSchedTypes,
     ScalarLike, BaseVariableType, VariableLike

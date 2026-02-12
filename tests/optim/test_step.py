@@ -294,10 +294,7 @@ def test_pdhg_tensor_tuples():
             prim[0][2:9]
         )
     zero_el = (torch.zeros(11), torch.zeros(5), torch.zeros(5))
-    lin_op_adj = adjoint(
-        lambda *args: lin_op(args), 
-        zero_el
-    )
+    lin_op_adj = adjoint(lambda *args: lin_op(args), zero_el)
     ss_p = torch.tensor(0.1)
     ss_d = torch.tensor(0.5)
     
@@ -307,9 +304,11 @@ def test_pdhg_tensor_tuples():
     prim_next_out = prox_primal(tuple(
         p - ss_p * lad for p, lad in zip(prim_prev, lin_op_adj(dual_prev))
     ))
-    xs_pt = tuple(2 * x_p1 - x_p for x_p, x_p1 in zip(prim_next_out, prim_prev))
-    dual_prev = prox_dual(tuple(
-        x_d - ss_d * lx_p for x_d, lx_p in zip(dual_prev, lin_op(xs_pt))
+    xs_pt = tuple(
+        2 * x_p1 - x_p for x_p1, x_p in zip(prim_next_out, prim_prev)
+    )
+    dual_next_out = prox_dual(tuple(
+        d + ss_d * lp for d, lp in zip(dual_prev, lin_op(xs_pt))
     ))
     
     pdhg_step = PDHGStep(
@@ -318,5 +317,10 @@ def test_pdhg_tensor_tuples():
     xs_p1s, xs_d1s = pdhg_step((prim_prev, dual_prev))
     
     assert torch.allclose(xs_p1s[0], prim_next_out[0], atol=1e-5)
+    assert torch.allclose(xs_p1s[1], prim_next_out[1], atol=1e-5)
+    assert torch.allclose(xs_p1s[2], prim_next_out[2], atol=1e-5)
+    assert torch.allclose(xs_d1s[0], dual_next_out[0], atol=1e-5)
+    assert torch.allclose(xs_d1s[1], dual_next_out[1], atol=1e-5)
+    assert torch.allclose(xs_d1s[2], dual_next_out[2], atol=1e-5)
     
     

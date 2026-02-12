@@ -2,11 +2,12 @@ from functools import wraps
 import torch
 from typing import Union, Tuple, Callable, Any
 
-from ..optim.variable import TensorLike, Variable
+from ..variable import Variable
+from ..variable.types import FlatVariable
 
 
-FlatParameter = TensorLike
-TupleParameter = Tuple[TensorLike, ...]
+FlatParameter = FlatVariable
+TupleParameter = Tuple[FlatVariable, ...]
 ParameterType = Union[FlatParameter, TupleParameter]
 
 class Parameter(Variable):

@@ -2,8 +2,10 @@ from __future__ import annotations
 from functools import wraps
 import torch
 
-from ..types import VariableType, VariableLike, ScalarLike, ApplyType, SpecType
-from .util import flatten, unflatten, is_tensor, is_valid_variable
+from .types import VariableType, VariableLike, ScalarLike, ApplyType, SpecType
+from .util import (
+    flatten, unflatten, is_tensor, is_valid_variable
+)
 
 
 class Variable:
@@ -174,5 +176,3 @@ class Variable:
         dual: VariableLike
     ) -> VariableLike:
         return Variable._from_pair(primal, dual)
-
-

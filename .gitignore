@@ -5,4 +5,5 @@ paramancer/__pycache__/
 paramancer/operators/__pycache__/
 paramancer/optim/__pycache__/
 paramancer/bloptim/__pycache__/
+paramancer/variable/__pycache__/
 storming.md

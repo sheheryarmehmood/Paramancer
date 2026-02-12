@@ -2,14 +2,14 @@ from __future__ import annotations
 from tqdm import tqdm
 import torch
 
-from .variable import Variable
+from ..variable import Variable
 from .step import (
     OptimizerStep,
     AffineStep, GDStep, PolyakStep, NesterovStep,
     ProxGradStep, FISTAStep, PDHGStep
 )
 from .util import OptimizationResult, to_float_scalar
-from ..types import (
+from ..variable.types import (
     GradMapType, ProxMapType, LinOpType,
     MomentumSchedType, MetricSpec,
     ScalarLike, FlatVariable, TupleVariable, VariableLike

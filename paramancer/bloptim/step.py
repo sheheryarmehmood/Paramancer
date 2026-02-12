@@ -1,7 +1,8 @@
 import torch
 from typing import Callable, Union
 
-from ..optim.variable import VariableType, Variable
+from ..variable import Variable
+from ..variable.types import VariableType
 from ..bloptim.parameter import ParameterType, Parameter
 from ..optim.step import GDStep, PolyakStep, NesterovStep
 from ..optim.step import ProxGradStep, FISTAStep

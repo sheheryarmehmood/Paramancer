@@ -1,30 +1,30 @@
 import torch
 import pytest
 
-from paramancer.optim.variable import Variable
+from paramancer.variable import Variable
 from paramancer.operators.imaging import conv_op
-from paramancer.operators.linalg import adjoint
 
 
 def test_variable_data():
     x = torch.randn(10)
-    x_curr = Variable(x)
-    assert torch.allclose(x_curr.data, x)       # Single tensor.
+    x_curr_var = Variable(x)
+    assert torch.allclose(x_curr_var.data, x)       # Single tensor.
     
     a = torch.randn(100)
     b = torch.rand(20)
     c = torch.randn(5)
-    x_curr = Variable((a, b, c))                # Tuple of tensors
-    assert torch.allclose(x_curr.data[0], a)
-    assert torch.allclose(x_curr.data[1], b)
-    assert torch.allclose(x_curr.data[2], c)
+    x_curr_var = Variable((a, b, c))                # Tuple of tensors
+    assert x_curr_var.data[0] is a
+    assert x_curr_var.data[1] is b
+    assert x_curr_var.data[2] is c
     
     ker_d1 = torch.rand(2, 1, 3, 3)             # kernel
     imgs = torch.rand(10, 3, 64, 64)            # primal variable
     imgs_d1 = conv_op(imgs, ker_d1)             # dual variable
-    x_curr = Variable.from_pdhg(imgs, imgs_d1)  # primal and dual tensors
-    assert torch.allclose(x_curr.primal.data, imgs)
-    assert torch.allclose(x_curr.dual.data, imgs_d1)
+    # vvvvv primal and dual tensors vvvvv
+    x_curr_var = Variable.from_pdhg(Variable(imgs), Variable(imgs_d1))
+    assert x_curr_var.primal.data is imgs
+    assert x_curr_var.dual.data is imgs_d1
     
     ker_d1 = torch.rand(2, 1, 3, 3)             # kernel "1st derivative"
     ker_d2 = torch.rand(4, 1, 3, 3)             # kernel "2nd derivative"
@@ -38,15 +38,21 @@ def test_variable_data():
     edgs_d1 = conv_op(edgs, ker_d2)             # dual variable 2
     edgs_d2 = conv_op(edgs_d1, ker_d3)          # dual variable 2
     
-    x_curr = Variable.from_pdhg(
-        (imgs, imgs_d1, imgs_d2), (edgs, edgs_d1, edgs_d2)
-    )
-    assert torch.allclose(x_curr.primal.data[0], imgs)
-    assert torch.allclose(x_curr.primal.data[1], imgs_d1)
-    assert torch.allclose(x_curr.primal.data[2], imgs_d2)
-    assert torch.allclose(x_curr.dual.data[0], edgs)
-    assert torch.allclose(x_curr.dual.data[1], edgs_d1)
-    assert torch.allclose(x_curr.dual.data[2], edgs_d2)
+    # when `Variable` objects are passed to Variable.from_pdhg.
+    primal = (imgs, imgs_d1, imgs_d2)
+    dual = (edgs, edgs_d1, edgs_d2)
+    x_curr_var = Variable.from_pdhg(Variable(primal), Variable(dual))
+    assert x_curr_var.primal.data[0] is imgs
+    assert x_curr_var.primal.data[1] is imgs_d1
+    assert x_curr_var.primal.data[2] is imgs_d2
+    assert x_curr_var.dual.data[0] is edgs
+    assert x_curr_var.dual.data[1] is edgs_d1
+    assert x_curr_var.dual.data[2] is edgs_d2
+    
+    # when `VariableType` objects are passed to Variable.from_pdhg.
+    x_curr = Variable.from_pdhg(primal, dual)
+    assert x_curr[0] is primal
+    assert x_curr[1] is dual
     
 
 def test_prox_grad_tensor_tuples():

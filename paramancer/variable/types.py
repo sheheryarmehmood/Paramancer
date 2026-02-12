@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Literal, TypeAlias, ParamSpec, Concatenate
 from torch import Tensor, nn
 
 if TYPE_CHECKING:
-    from .optim.variable import Variable
+    from .variable import Variable
 
 
 # Types allowed for Variable construction

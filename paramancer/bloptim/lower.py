@@ -7,7 +7,8 @@ from ..optim.optimizer import Optimizer
 from .implicit import ImplicitDifferentiation
 from .step import GDMarkovParamStep
 from .parameter import ParameterType, Parameter
-from ..optim.variable import Variable, VariableType
+from ..variable import Variable
+from ..variable.types import VariableType
 
 
 class OptimizerID(torch.autograd.Function):

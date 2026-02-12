@@ -3,7 +3,7 @@ import pytest
 
 from paramancer.operators.grad import _gradient, gradient
 from paramancer.operators.norms import l2_sq
-from paramancer.optim.variable import Variable
+from paramancer.variable import Variable
 from paramancer.operators.norms import inner_product, l2_sq
 
 

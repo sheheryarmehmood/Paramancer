@@ -1,7 +1,7 @@
 from __future__ import annotations
 import torch
 
-from ..types import BaseVariableType, ParamLinOpType
+from ..variable.types import BaseVariableType, ParamLinOpType
 
 
 def adjoint(
