@@ -13,6 +13,8 @@ def test_gradient():
         x1, x2 = x_data
         u1, u2 = u
         return 0.5 * a1 * u2.sum() * l2_sq(x1) + a2 * inner_product(x2, u1)
+    # If `smooth` can handle different kinds of inputs, then so can `grad_fn`.
+    # We need to construct `grad_fn` only once.
     grad_fn = gradient(smooth)
     
     x1, x2 = torch.randn(5), torch.randn(7)
@@ -35,7 +37,7 @@ def test_gradient():
     assert torch.allclose(gd_var.data[1], a2 * u1)
     
     u_par = torch.nn.ParameterList(u)
-    x1.requires_grad = True     # x_var should get updated automatically?
+    x1.requires_grad = True     # x_var should get updated automatically.
     gd_var = grad_fn(x_var, u_par, a1, a2)
     sum(tuple(g.sum() for g in gd_var.data)).backward()
     
@@ -44,6 +46,8 @@ def test_gradient():
     )
     assert torch.allclose(u_par[0].grad, a2 * torch.ones_like(u1))
     assert torch.allclose(u_par[1].grad, a1 * x1.sum() * torch.ones_like(u2))
+    assert x1.requires_grad
+    assert not x2.requires_grad
 
 
 def test_backend_gradient():
