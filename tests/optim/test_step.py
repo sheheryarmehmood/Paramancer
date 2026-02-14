@@ -294,7 +294,7 @@ def test_pdhg_tensor_tuples():
             prim[0][2:9]
         )
     zero_el = (torch.zeros(11), torch.zeros(5), torch.zeros(5))
-    lin_op_adj = adjoint(lambda *args: lin_op(args), zero_el)
+    lin_op_adj = adjoint(lin_op, zero_el)
     ss_p = torch.tensor(0.1)
     ss_d = torch.tensor(0.5)
     

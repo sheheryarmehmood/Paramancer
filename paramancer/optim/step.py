@@ -348,8 +348,13 @@ class PDHGStep(OptimizerStep):
         tracking: bool = False
     ):
         super().__init__(tracking)
+        if (lin_op_adj is None) == (zero_el is None):
+            raise ValueError(
+                "Either `zero_el` should be supplied or `lin_op_adj`, but not"
+                " both. One of them must be set to `None`."
+            )
         if lin_op_adj is None:
-            lin_op_adj = self._setup_lin_op_adj(lin_op, zero_el)
+            lin_op_adj = adjoint(lin_op, zero_el)
         self.primal_step = PDHGPartialStep(
             stepsize_primal, prox_map_primal, lin_op_adj
         )
@@ -366,14 +371,4 @@ class PDHGStep(OptimizerStep):
         if self._residual_tracking:
             self._residual = z_new - z_curr         # torch.Tensor Operation
         return z_new
-    
-    def _setup_lin_op_adj(self, lin_op, zero_el):
-        if zero_el is None:
-            raise ValueError(
-                "Either the adjoint linear map must be provided beforehand or"
-                " the zero element must be given for automatic computation."
-            )
-        if isinstance(zero_el, tuple):
-            lin_op_ = lambda *args: lin_op(args)
-        return adjoint(lin_op_, zero_el)
         

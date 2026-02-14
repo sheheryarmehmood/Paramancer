@@ -21,12 +21,14 @@ ScalarLike: TypeAlias = float | Tensor
 
 
 # Aliases for callables with various args and returns types
+BVarToTen: TypeAlias = Callable[[BaseVariableType], Tensor]
 BVarToBVar: TypeAlias = Callable[[BaseVariableType], BaseVariableType]
 VoidToScal: TypeAlias = Callable[[], ScalarLike]
 VarToScal: TypeAlias = Callable[[VariableType], ScalarLike]
 BVarXBVarToScal: TypeAlias = Callable[[VariableType, VariableType], ScalarLike]
 
 # Common function types used across paramancer
+SmoothObjType: TypeAlias = BVarToTen
 GradMapType: TypeAlias = BVarToBVar
 ProxMapType: TypeAlias = BVarToBVar
 LinOpType: TypeAlias = BVarToBVar

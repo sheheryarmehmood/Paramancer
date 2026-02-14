@@ -12,7 +12,7 @@ def testadjoint_single_input():
     assert torch.allclose(lin_op_adj(y), A.T @ y, atol=1e-5)
 
 def testadjoint_multiple_input():
-    def lin_op(*args): return sum(args)
+    def lin_op(x): return sum(x)
     num_inputs = 5
     input_size = 15
     zero_el = tuple(torch.zeros(input_size) for _ in range(num_inputs))
@@ -45,7 +45,9 @@ def test_parametricadjoint():
     A1 = torch.rand(rows, cols1)
     A2 = torch.rand(rows, cols2)
     def lin_op_single(x, A): return A @ x
-    def lin_op_multi(x1, x2, A1, A2): return A1 @ x1 + A2 @ x2
+    def lin_op_multi(xs, A1, A2):
+        x1, x2 = xs
+        return A1 @ x1 + A2 @ x2
     zero_el_single = torch.zeros(cols)
     zero_el_multi = torch.zeros(cols1), torch.zeros(cols2)
     lin_op_adj_single = adjoint(lin_op_single, zero_el_single)

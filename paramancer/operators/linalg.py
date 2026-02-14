@@ -47,14 +47,14 @@ def adjoint(
     multi_var_op = isinstance(zero_el, (tuple, list))
     if multi_var_op:
         typ = type(zero_el)
-        zero_el = typ([z.clone().detach() for z in zero_el])
+        zero_el = typ([z.detach().clone() for z in zero_el])
     else:
-        zero_el = zero_el.clone().detach()
-    def lin_op_adj(inps, *params):
-        inputs = inps + params if isinstance(inps, tuple) else (inps, *params)
+        zero_el = zero_el.detach().clone()
+    def lin_op_adj(inps, *args):
+        inputs = inps + args if isinstance(inps, tuple) else (inps, *args)
         create_graph = any(inp.requires_grad for inp in inputs)
         return torch.autograd.functional.vjp(
-            lambda *zl: lin_op(*zl, *params), zero_el, inps,
-            create_graph=create_graph
+            lambda *zl: lin_op(zl if multi_var_op else zl[0], *args),
+            zero_el, inps, create_graph=create_graph
         )[1]
     return lin_op_adj
