@@ -5,8 +5,9 @@ import abc
 from ..variable import Variable
 from .scheduler import MomentumScheduler
 from ..operators.linalg import adjoint
+from ..operators.grad import gradient
 from ..variable.types import (
-    GradMapType, ProxMapType, LinOpType,
+    SmoothObjType, GradMapType, ProxMapType, LinOpType,
     MomentumSchedType, StepsizeSchedTypes,
     ScalarLike, BaseVariableType, VariableLike
 )
@@ -84,14 +85,16 @@ class GDStep(OptimizerStep):
     def __init__(
         self, 
         stepsize: ScalarLike,
-        grad_map: GradMapType,
+        smooth_obj: SmoothObjType | None = None,
+        grad_map: GradMapType | None = None,
         stepsize_scheduler: StepsizeSchedTypes | None = None,
         linesearch: bool = True,
         tracking: bool = False
     ):
         super().__init__(tracking=tracking)
         self.stepsize = stepsize
-        self.grad_map = Variable.wrap(grad_map)
+        self._init_grad_map(smooth_obj, grad_map)
+        # self.grad_map = Variable.wrap(grad_map)
         self.stepsize_scheduler = stepsize_scheduler
         self.linesearch = linesearch
     
@@ -103,6 +106,17 @@ class GDStep(OptimizerStep):
         if self._residual_tracking:
             self._residual = x_new - x_curr
         return x_new
+    
+    def _init_grad_map(self, smooth_obj, grad_map):
+        if (smooth_obj is None) == (grad_map is None):
+            raise ValueError(
+                "Either `grad_map` should be supplied or `smooth_obj`, but not"
+                " both. One of them must be set to `None`."
+            )
+        if grad_map is None:
+            self.grad_map = Variable.wrap(gradient(smooth_obj))
+        else:
+            self.grad_map = Variable.wrap(grad_map)
     
     def _set_stepsize(self, x_curr: Variable, direction: Variable) -> None:
         if not self.stepsize_scheduler:
@@ -147,11 +161,15 @@ class PolyakStep(OptimizerStep):
         self,
         stepsize: ScalarLike,
         momentum: ScalarLike,
-        grad_map: GradMapType,
+        smooth_obj: SmoothObjType | None = None,
+        grad_map: GradMapType | None = None,
         tracking: bool = False
     ):
         super().__init__(tracking=False) # Uses the tracking of GDStep
-        self.gd_step = GDStep(stepsize, grad_map, tracking=tracking)
+        self.gd_step = GDStep(
+            stepsize, smooth_obj=smooth_obj, grad_map=grad_map, 
+            tracking=tracking
+        )
         self.mm_step = MomentumStep(momentum, strategy=MomentumType.Polyak)
         self._x_prev = None
     
@@ -188,7 +206,8 @@ class NesterovStep(OptimizerStep):
     def __init__(
         self,
         stepsize: ScalarLike,
-        grad_map: GradMapType,
+        smooth_obj: SmoothObjType | None = None,
+        grad_map: GradMapType | None = None,
         momentum_scheduler: MomentumSchedType | None = None,
         tracking: bool = False
     ):
@@ -196,7 +215,8 @@ class NesterovStep(OptimizerStep):
         if momentum_scheduler is None:
             momentum_scheduler = MomentumScheduler()
         self.gd_step = GDStep(
-            stepsize, grad_map, tracking=tracking
+            stepsize, smooth_obj=smooth_obj, grad_map=grad_map, 
+            tracking=tracking
         )
         self.mm_step = MomentumStep(
             momentum=None, momentum_scheduler=momentum_scheduler
@@ -239,12 +259,16 @@ class ProxGradStep(OptimizerStep):
     def __init__(
         self,
         stepsize: ScalarLike,
-        grad_map: GradMapType,
         prox_map: ProxMapType,
+        smooth_obj: SmoothObjType | None = None,
+        grad_map: GradMapType | None = None,
         tracking: bool = False
     ):
         super().__init__(tracking=tracking)
-        self.gd_step = GDStep(stepsize, grad_map, tracking=False)
+        self.gd_step = GDStep(
+            stepsize, smooth_obj=smooth_obj, grad_map=grad_map, 
+            tracking=False
+        )
         self.prox_step = ProxStep(prox_map)
     
     @Variable.ensure_var_input
@@ -258,8 +282,9 @@ class FISTAStep(OptimizerStep):
     def __init__(
         self,
         stepsize: ScalarLike,
-        grad_map: GradMapType,
         prox_map: ProxMapType,
+        smooth_obj: SmoothObjType | None = None,
+        grad_map: GradMapType | None = None,
         momentum_scheduler: MomentumSchedType | None = None,
         tracking: bool = False
     ):
@@ -267,7 +292,8 @@ class FISTAStep(OptimizerStep):
         if momentum_scheduler is None:
             momentum_scheduler = MomentumScheduler()
         self.pgd_step = ProxGradStep(
-            stepsize, grad_map, prox_map, tracking=tracking
+            stepsize, prox_map, smooth_obj=smooth_obj, 
+            grad_map=grad_map, tracking=tracking
         )
         self.mm_step = MomentumStep(
             momentum=None, momentum_scheduler=momentum_scheduler

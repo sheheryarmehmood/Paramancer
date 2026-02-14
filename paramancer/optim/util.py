@@ -20,3 +20,4 @@ def to_float_scalar(x: ScalarLike) -> float:
             raise ValueError("Expected a scalar tensor for metric value.")
         return float(x.detach().item())
     return float(x)
+

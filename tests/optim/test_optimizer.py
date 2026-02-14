@@ -5,6 +5,7 @@ import pytest
 from paramancer.operators.norms import l2
 from paramancer.optim import GradientDescent, HeavyBall, AcceleratedGradient
 from paramancer.optim import ProximalGradient, FISTA, PDHG
+from paramancer.operators.norms import l2_sq
 
 
 # Testing Gradient Descent and Heavy-ball
@@ -22,8 +23,8 @@ def test_gd_and_hb():
     
     def grad_map(x): return A.T @ (A @ x - b)
     
-    optim_gd = GradientDescent(ss_gd, grad_map)
-    optim_hb = HeavyBall(ss_hb, mm, grad_map)
+    optim_gd = GradientDescent(ss_gd, grad_map=grad_map)
+    optim_hb = HeavyBall(ss_hb, mm, grad_map=grad_map)
     
     x_init = torch.randn(N)
     xm_gd = optim_gd(x_init, iters=10000)
@@ -49,7 +50,7 @@ def test_nag_unrolling():
     A = A.detach().clone().requires_grad_()
     b = b.detach().clone().requires_grad_()
     def grad_map(x): return A.T @ (A @ x - b)
-    optim_nag = AcceleratedGradient(ss, grad_map)
+    optim_nag = AcceleratedGradient(ss, grad_map=grad_map)
     
     x_sol = torch.randn(N)
     
@@ -68,11 +69,12 @@ def test_prox_methods():
     
     ss = 1 / lip
     
+    def smooth_obj(x): return l2_sq(A @ x - b) / 2
     def grad_map(x): return A.T @ (A @ x - b)
     def prox_map(x): return x / (1 + reg * ss)
     
-    optim_pgd = ProximalGradient(ss, grad_map, prox_map)
-    optim_fista = FISTA(ss, grad_map, prox_map)
+    optim_pgd = ProximalGradient(ss, prox_map, grad_map=grad_map)
+    optim_fista = FISTA(ss, prox_map, smooth_obj=smooth_obj)
     
     x_init = torch.randn(N)
     xm_pgd = optim_pgd(x_init, iters=10000)
@@ -95,7 +97,9 @@ def test_hb_with_default_metric():
     
     def grad_map(x): return A.T @ (A @ x - b)
     
-    heavy_ball = HeavyBall(ss, mm, grad_map, tol=1e-6, metric="default")
+    heavy_ball = HeavyBall(
+        ss, mm, grad_map=grad_map, tol=1e-6, metric="default"
+    )
     
     x_hb = heavy_ball(torch.randn(N), iters=10000)
     
@@ -114,7 +118,9 @@ def test_nag_with_gradient_metric():
     def grad_map(x): return A.T @ (A @ x - b)
     def metric(x): return l2(grad_map(x))
     
-    nag_optim = AcceleratedGradient(ss, grad_map, tol=1e-6, metric=metric)
+    nag_optim = AcceleratedGradient(
+        ss, grad_map=grad_map, tol=1e-6, metric=metric
+    )
     
     x_nag = nag_optim(torch.randn(N), iters=10000)
     

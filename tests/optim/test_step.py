@@ -1,4 +1,5 @@
 import torch
+import torch.linalg as la
 import pytest
 import torch.nn.functional as nnF
 
@@ -6,6 +7,36 @@ from paramancer.optim.step import ProxStep, GDStep, MomentumStep
 from paramancer.optim.step import PolyakStep, NesterovStep
 from paramancer.optim.step import ProxGradStep, FISTAStep, PDHGStep
 from paramancer.operators.linalg import adjoint
+
+
+def test_gd_step_no_grad_map():
+    def smooth_obj(x):
+        x1, x2 = x
+        return x1.sum() + 0.5 * la.norm(x2)**2
+    
+    def grad_map(x):
+        x1, x2 = x
+        return torch.ones_like(x1), x2
+    
+    ss = torch.tensor(1.)
+    x_init = torch.randn(3, 4, 2), torch.randn(10, 7)
+    
+    xk = tuple(xi for xi in x_init)
+    for _ in range(3):
+        xk = tuple(x - ss * gd for x, gd in zip(xk, grad_map(xk)))
+    
+    gd_step_obj = GDStep(ss, smooth_obj=smooth_obj)
+    xk_obj = gd_step_obj(gd_step_obj(gd_step_obj(x_init)))
+    
+    gd_step_grad = GDStep(ss, grad_map=grad_map)
+    xk_grad = gd_step_grad(gd_step_grad(gd_step_grad(x_init)))
+    
+    assert torch.allclose(xk[0], xk_grad[0])
+    assert torch.allclose(xk_grad[0], xk_obj[0])
+    
+    assert torch.allclose(xk[1], xk_grad[1])
+    assert torch.allclose(xk_grad[1], xk_obj[1])
+    
 
 
 def test_gd_step_squared_euclidean():
@@ -46,7 +77,7 @@ def test_polyak_step():
     
     
     # 3 steps using an object of `PolyakStep`.
-    polyak_step = PolyakStep(ss, mm, grad_map)
+    polyak_step = PolyakStep(ss, mm, grad_map=grad_map)
     x_step = polyak_step(polyak_step(polyak_step(x_curr.clone())))
     
     
@@ -82,7 +113,7 @@ def test_pgd_and_fista_step():
     
     
     # 3 Iterations of `ProxGradStep`
-    pgd_step = ProxGradStep(ss, grad_map, prox_map)
+    pgd_step = ProxGradStep(ss, prox_map, grad_map=grad_map)
     x_pgd = pgd_step(pgd_step(pgd_step(x_curr.clone())))
     
     
@@ -100,7 +131,7 @@ def test_pgd_and_fista_step():
     
     
     # 3 Iterations of `FISTAStep`
-    fista_step = FISTAStep(ss, grad_map, prox_map)
+    fista_step = FISTAStep(ss, prox_map, grad_map=grad_map)
     x_fista = fista_step(fista_step(fista_step(x_curr.clone())))
     
     # Custom Implemented FISTA Steps
@@ -145,7 +176,7 @@ def test_gd_step_differentiation():
     
     def grad_map(x):
         return A_step.T @ (A_step @ x - b_step)
-    gd_step = GDStep(ss, grad_map)
+    gd_step = GDStep(ss, grad_map=grad_map)
     y_step = gd_step(x_step)
     y_step.backward(y_grad)
     
@@ -178,7 +209,7 @@ def test_fista_residual_value():
     x3 = prox_fn(y3 - ss * grad_fn(y3))
     res3 = x3 - y3
     
-    fista_step = FISTAStep(ss, grad_fn, prox_fn, tracking=True)
+    fista_step = FISTAStep(ss, prox_fn, grad_map=grad_fn, tracking=True)
     x_curr = x0
     
     # Iter 1
@@ -200,7 +231,7 @@ def test_fista_residual_attribute_duplication():
     ss = 0.01
     reg = 0.5
     
-    fista_step = FISTAStep(ss, grad_fn, prox_fn, tracking=True)
+    fista_step = FISTAStep(ss, prox_fn, grad_map=grad_fn, tracking=True)
     _ = fista_step(fista_step(fista_step(torch.tensor(10.))))
     
     # FISTAStep residual must come from its ProxGradStep.
@@ -266,12 +297,12 @@ def test_markovian_property():
     mm = torch.tensor(0.1)
     
     mm_step = MomentumStep(mm)
-    gd_step = GDStep(ss, grad_map)
+    gd_step = GDStep(ss, grad_map=grad_map)
     prox_step = ProxStep(prox_map)
-    hb_step = PolyakStep(ss, mm, grad_map)
-    nag_step = NesterovStep(ss, grad_map)
-    pgd_step = ProxGradStep(ss, grad_map, prox_map)
-    fista_step = FISTAStep(ss, grad_map, prox_map)
+    hb_step = PolyakStep(ss, mm, grad_map=grad_map)
+    nag_step = NesterovStep(ss, grad_map=grad_map)
+    pgd_step = ProxGradStep(ss, prox_map, grad_map=grad_map)
+    fista_step = FISTAStep(ss, prox_map, grad_map=grad_map)
     
     assert not mm_step.is_markovian()
     assert gd_step.is_markovian()

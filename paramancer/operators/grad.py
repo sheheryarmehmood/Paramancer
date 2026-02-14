@@ -75,7 +75,10 @@ def gradient(smooth: PObjType) -> PGradMapType:
         with torch.enable_grad():
             x_unflat = unflatten(x_flat, x_spec)
             x_in = Variable(x_unflat) if x_was_var else x_unflat
-            out = smooth(x_in, params, *rest).sum()
+            out = (
+                smooth(x_in, *rest).sum() if params is None
+                else smooth(x_in, params, *rest).sum()
+            )
 
         gd = torch.autograd.grad(out, x_flat, create_graph=create_graph)
         

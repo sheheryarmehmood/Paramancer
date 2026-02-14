@@ -10,7 +10,7 @@ from .step import (
 )
 from .util import OptimizationResult, to_float_scalar
 from ..variable.types import (
-    GradMapType, ProxMapType, LinOpType,
+    SmoothObjType, GradMapType, ProxMapType, LinOpType,
     MomentumSchedType, MetricSpec,
     ScalarLike, FlatVariable, TupleVariable, VariableLike
 )
@@ -116,7 +116,8 @@ class GradientDescent(Optimizer):
     def __init__(
         self,
         stepsize: ScalarLike,
-        grad_map: GradMapType,
+        smooth_obj: SmoothObjType | None = None,
+        grad_map: GradMapType | None = None,
         tol: float = 1e-5,
         iters: int = 100,
         metric: MetricSpec | None = None,
@@ -124,7 +125,10 @@ class GradientDescent(Optimizer):
         verbose: bool = False
     ):
         tracking = metric == "default"
-        step = GDStep(stepsize, grad_map, tracking=tracking)
+        step = GDStep(
+            stepsize, smooth_obj=smooth_obj, grad_map=grad_map, 
+            tracking=tracking
+        )
         super().__init__(step, tol, iters, metric, store_history, verbose)
 
 
@@ -133,7 +137,8 @@ class HeavyBall(Optimizer):
         self,
         stepsize: ScalarLike,
         momentum: ScalarLike,
-        grad_map: GradMapType,
+        smooth_obj: SmoothObjType | None = None,
+        grad_map: GradMapType | None = None,
         tol: float = 1e-5,
         iters: int = 100,
         metric: MetricSpec | None = None,
@@ -142,7 +147,8 @@ class HeavyBall(Optimizer):
     ):
         tracking = metric == "default"
         step = PolyakStep(
-            stepsize, momentum, grad_map, tracking=tracking
+            stepsize, momentum, smooth_obj=smooth_obj, grad_map=grad_map, 
+            tracking=tracking
         )
         super().__init__(step, tol, iters, metric, store_history, verbose)
 
@@ -150,7 +156,8 @@ class AcceleratedGradient(Optimizer):
     def __init__(
         self,
         stepsize: ScalarLike,
-        grad_map: GradMapType,
+        smooth_obj: SmoothObjType | None = None,
+        grad_map: GradMapType | None = None,
         momentum_scheduler: MomentumSchedType | None = None,
         tol: float = 1e-5,
         iters: int = 100,
@@ -160,8 +167,7 @@ class AcceleratedGradient(Optimizer):
     ):
         tracking = metric == "default"
         step = NesterovStep(
-            stepsize, grad_map, momentum_scheduler=momentum_scheduler,
-            tracking=tracking
+            stepsize, smooth_obj=smooth_obj, grad_map=grad_map, momentum_scheduler=momentum_scheduler, tracking=tracking
         )
         super().__init__(step, tol, iters, metric, store_history, verbose)
     
@@ -173,8 +179,9 @@ class ProximalGradient(Optimizer):
     def __init__(
         self,
         stepsize: ScalarLike,
-        grad_map: GradMapType,
         prox_map: ProxMapType,
+        smooth_obj: SmoothObjType | None = None,
+        grad_map: GradMapType | None = None,
         tol: float = 1e-5,
         iters: int = 100,
         metric: MetricSpec | None = None,
@@ -183,7 +190,8 @@ class ProximalGradient(Optimizer):
     ):
         tracking = metric == "default"
         step = ProxGradStep(
-            stepsize, grad_map, prox_map, tracking=tracking
+            stepsize, prox_map, smooth_obj=smooth_obj, grad_map=grad_map, 
+            tracking=tracking
         )
         super().__init__(step, tol, iters, metric, store_history, verbose)
 
@@ -192,8 +200,9 @@ class FISTA(Optimizer):
     def __init__(
         self,
         stepsize: ScalarLike,
-        grad_map: GradMapType,
         prox_map: ProxMapType,
+        smooth_obj: SmoothObjType | None = None,
+        grad_map: GradMapType | None = None,
         momentum_scheduler: MomentumSchedType | None = None,
         tol: float = 1e-5,
         iters: int = 100,
@@ -203,8 +212,8 @@ class FISTA(Optimizer):
     ):
         tracking = metric == "default"
         step = FISTAStep(
-            stepsize, grad_map, prox_map, tracking=tracking,
-            momentum_scheduler=momentum_scheduler
+            stepsize, prox_map, smooth_obj=smooth_obj, grad_map=grad_map, 
+            tracking=tracking, momentum_scheduler=momentum_scheduler
         )
         super().__init__(step, tol, iters, metric, store_history, verbose)
     
