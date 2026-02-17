@@ -1,13 +1,14 @@
 from __future__ import annotations
 from enum import Enum
 import abc
+from typing import Any
 
 from ..variable import Variable
 from .scheduler import MomentumScheduler
 from ..operators.linalg import adjoint
 from ..operators.grad import gradient
 from ..variable.types import (
-    SmoothObjType, GradMapType, ProxMapType, LinOpType,
+    PSmoothObjType, PGradMapType, ProxMapType, LinOpType,
     MomentumSchedType, StepsizeSchedTypes,
     ScalarLike, BaseVariableType, VariableLike
 )
@@ -25,12 +26,15 @@ class OptimizerStep(abc.ABC):
         self._input_is_variable = True
     
     @abc.abstractmethod
-    def step(self, x_curr: Variable) -> Variable: pass
+    def step(
+        self, x_curr: Variable, *args: Any, **kwargs: Any
+    ) -> Variable:
+        pass
     
     def __call__(
-        self, x_curr: VariableLike
+        self, x_curr: VariableLike, *args: Any, **kwargs: Any
     ) -> VariableLike:
-        return self.step(x_curr)
+        return self.step(x_curr, *args, **kwargs)
     
     @property
     def residual(self):
@@ -85,8 +89,8 @@ class GDStep(OptimizerStep):
     def __init__(
         self, 
         stepsize: ScalarLike,
-        smooth_obj: SmoothObjType | None = None,
-        grad_map: GradMapType | None = None,
+        smooth_obj: PSmoothObjType | None = None,
+        grad_map: PGradMapType | None = None,
         stepsize_scheduler: StepsizeSchedTypes | None = None,
         linesearch: bool = True,
         tracking: bool = False
@@ -94,17 +98,17 @@ class GDStep(OptimizerStep):
         super().__init__(tracking=tracking)
         self.stepsize = stepsize
         self._init_grad_map(smooth_obj, grad_map)
-        # self.grad_map = Variable.wrap(grad_map)
         self.stepsize_scheduler = stepsize_scheduler
         self.linesearch = linesearch
     
     @Variable.ensure_var_input
-    def step(self, x_curr: Variable) -> Variable:
-        direction = -self.grad_map(x_curr)
+    def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
+        direction = -self.grad_map(x_curr, *args, **kwargs)
         self._set_stepsize(x_curr, direction)
         x_new = x_curr + self.stepsize * direction
         if self._residual_tracking:
             self._residual = x_new - x_curr
+        # breakpoint()
         return x_new
     
     def _init_grad_map(self, smooth_obj, grad_map):
@@ -150,8 +154,8 @@ class AffineStep(OptimizerStep):
         self.vector = Variable(vector)
     
     @Variable.ensure_var_input
-    def step(self, x_curr: Variable) -> Variable:
-        x_new = self.lin_op(x_curr) + self.vector
+    def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
+        x_new = self.lin_op(x_curr, *args, **kwargs) + self.vector
         if self._residual_tracking:
             self._residual = x_new - x_curr
         return x_new
@@ -161,8 +165,8 @@ class PolyakStep(OptimizerStep):
         self,
         stepsize: ScalarLike,
         momentum: ScalarLike,
-        smooth_obj: SmoothObjType | None = None,
-        grad_map: GradMapType | None = None,
+        smooth_obj: PSmoothObjType | None = None,
+        grad_map: PGradMapType | None = None,
         tracking: bool = False
     ):
         super().__init__(tracking=False) # Uses the tracking of GDStep
@@ -174,8 +178,8 @@ class PolyakStep(OptimizerStep):
         self._x_prev = None
     
     @Variable.ensure_var_input
-    def step(self, x_curr: Variable) -> Variable:
-        x_new = self.gd_step(x_curr)
+    def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
+        x_new = self.gd_step(x_curr, *args, **kwargs)
         if self._x_prev is not None:
             z_curr = Variable.from_momentum(x_curr, self._x_prev)
             # vvvvv torch.Tensor Operation vvvvv
@@ -206,8 +210,8 @@ class NesterovStep(OptimizerStep):
     def __init__(
         self,
         stepsize: ScalarLike,
-        smooth_obj: SmoothObjType | None = None,
-        grad_map: GradMapType | None = None,
+        smooth_obj: PSmoothObjType | None = None,
+        grad_map: PGradMapType | None = None,
         momentum_scheduler: MomentumSchedType | None = None,
         tracking: bool = False
     ):
@@ -224,11 +228,11 @@ class NesterovStep(OptimizerStep):
         self._x_prev = None
     
     @Variable.ensure_var_input
-    def step(self, x_curr: Variable) -> Variable:
+    def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
         if self._x_prev is None:
             self._x_prev = x_curr
         z_curr = Variable.from_momentum(x_curr, self._x_prev)
-        x_new = self.gd_step(self.mm_step(z_curr))
+        x_new = self.gd_step(self.mm_step(z_curr), *args, **kwargs)
         self._x_prev = x_curr
         return x_new
     
@@ -260,8 +264,8 @@ class ProxGradStep(OptimizerStep):
         self,
         stepsize: ScalarLike,
         prox_map: ProxMapType,
-        smooth_obj: SmoothObjType | None = None,
-        grad_map: GradMapType | None = None,
+        smooth_obj: PSmoothObjType | None = None,
+        grad_map: PGradMapType | None = None,
         tracking: bool = False
     ):
         super().__init__(tracking=tracking)
@@ -272,8 +276,8 @@ class ProxGradStep(OptimizerStep):
         self.prox_step = ProxStep(prox_map)
     
     @Variable.ensure_var_input
-    def step(self, x_curr: Variable) -> Variable:
-        x_new = self.prox_step(self.gd_step(x_curr))
+    def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
+        x_new = self.prox_step(self.gd_step(x_curr, *args, **kwargs))
         if self._residual_tracking:
             self._residual = x_new - x_curr         # torch.Tensor Operation
         return x_new
@@ -283,8 +287,8 @@ class FISTAStep(OptimizerStep):
         self,
         stepsize: ScalarLike,
         prox_map: ProxMapType,
-        smooth_obj: SmoothObjType | None = None,
-        grad_map: GradMapType | None = None,
+        smooth_obj: PSmoothObjType | None = None,
+        grad_map: PGradMapType | None = None,
         momentum_scheduler: MomentumSchedType | None = None,
         tracking: bool = False
     ):
@@ -301,11 +305,11 @@ class FISTAStep(OptimizerStep):
         self._x_prev = None
     
     @Variable.ensure_var_input
-    def step(self, x_curr: Variable) -> Variable:
+    def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
         if self._x_prev is None:
             self._x_prev = x_curr
         z_curr = Variable.from_momentum(x_curr, self._x_prev)
-        x_new = self.pgd_step(self.mm_step(z_curr))
+        x_new = self.pgd_step(self.mm_step(z_curr), *args, **kwargs)
         self._x_prev = x_curr
         return x_new
     
@@ -348,16 +352,18 @@ class PDHGPartialStep(OptimizerStep):
     def __call__(
         self,
         inp_curr: BaseVariableType, 
-        oth_curr: BaseVariableType
+        oth_curr: BaseVariableType,
+        *args: Any,
+        **kwargs: Any
     ) -> BaseVariableType:
-        return self.step(inp_curr, oth_curr)
+        return self.step(inp_curr, oth_curr, *args, **kwargs)
     
     @Variable.ensure_var_input
     def step(
-        self, inp_curr: Variable, oth_curr: Variable
+        self, inp_curr: Variable, oth_curr: Variable, *args: Any, **kwargs: Any
     ) -> Variable:
         return self.prox_step(
-            inp_curr - self.stepsize * self.lin_op(oth_curr)
+            inp_curr - self.stepsize * self.lin_op(oth_curr, *args, **kwargs)
         )
 
 
@@ -389,10 +395,10 @@ class PDHGStep(OptimizerStep):
         )
     
     @Variable.ensure_var_input
-    def step(self, z_curr: Variable) -> Variable:
-        x_prim = self.primal_step(z_curr.primal, z_curr.dual)
+    def step(self, z_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
+        x_prim = self.primal_step(z_curr.primal, z_curr.dual, *args, **kwargs)
         x_prim_mm = 2 * x_prim - z_curr.primal
-        x_dual = self.dual_step(z_curr.dual, -x_prim_mm)
+        x_dual = self.dual_step(z_curr.dual, -x_prim_mm, *args, **kwargs)
         z_new = Variable.from_pdhg(x_prim, x_dual)
         if self._residual_tracking:
             self._residual = z_new - z_curr         # torch.Tensor Operation

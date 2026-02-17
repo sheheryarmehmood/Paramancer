@@ -71,10 +71,10 @@ BVarXAnyToBVar: TypeAlias = Callable[
 ]
 
 # Aliases for various parametric maps
-ParamObjType: TypeAlias = BVarXPrmXAnyToTen
+ParamSmoothObjType: TypeAlias = BVarXPrmXAnyToTen
 ParamGradMapType: TypeAlias = BVarXPrmXAnyToBVar
 ParamProxMapType: TypeAlias = BVarXPrmXAnyToBVar
 # vvvvv Generic aliases (Param* aliases are stricter specializations of these)
-PObjType: TypeAlias = BVarXAnyToTen
+PSmoothObjType: TypeAlias = BVarXAnyToTen
 PGradMapType: TypeAlias = BVarXAnyToBVar
 PLinOpType: TypeAlias = BVarXAnyToBVar

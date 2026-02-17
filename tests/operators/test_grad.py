@@ -1,3 +1,4 @@
+from __future__ import annotations
 import torch
 import pytest
 
@@ -5,6 +6,9 @@ from paramancer.operators.grad import _gradient, gradient
 from paramancer.operators.norms import l2_sq
 from paramancer.variable import Variable
 from paramancer.operators.norms import inner_product, l2_sq
+from paramancer.variable.types import (
+    BaseVariableLike, ParameterType, ScalarLike
+)
 
 
 def test_gradient():
@@ -48,6 +52,109 @@ def test_gradient():
     assert torch.allclose(u_par[1].grad, a1 * x1.sum() * torch.ones_like(u2))
     assert x1.requires_grad
     assert not x2.requires_grad
+
+
+def test_gradient_differentiability_with_args_and_kwargs():
+    def smooth_bvar(
+        x: BaseVariableLike, a: torch.Tensor, b: ScalarLike, c: ScalarLike = 4
+    ) -> torch.Tensor:
+        x1, x2, x3 = x
+        return b * x1.sum() + 0.5 * c * (x2 ** 2).sum() + inner_product(a, x3)
+    
+    def smooth_var(
+        x: Variable, u: ParameterType, c: ScalarLike = 4
+    ) -> torch.Tensor:
+        x1, x2, x3 = x.data
+        a, b = tuple(u)
+        return b * x1.sum() + 0.5 * c * (x2 ** 2).sum() + inner_product(a, x3)
+    
+    def grad(
+        x: BaseVariableLike, a: torch.Tensor, b: ScalarLike, c: ScalarLike = 4
+    ):
+        x1, x2, _ = x
+        return b * torch.ones_like(x1), c * x2, a
+    
+    def vHp(
+        x: BaseVariableLike, a: torch.Tensor, b: ScalarLike, c: ScalarLike,
+        gd1_grad, gd2_grad, gd3_grad
+    ):
+        x1, _, x3 = x
+        zx1, zx3 = torch.zeros_like(x1), torch.zeros_like(x3)
+        return (zx1, c * gd2_grad, zx3)
+    
+    def vJgp(
+        x: BaseVariableLike, a: torch.Tensor, b: ScalarLike, c: ScalarLike,
+        gd1_grad, gd2_grad, gd3_grad
+    ):
+        return gd3_grad, gd1_grad.sum()
+    
+    x1 = torch.rand(4, 3)
+    x2 = torch.randn(10, 5)
+    x3 = torch.randn(10)
+    a = torch.randn(10)
+    b = torch.rand(1).squeeze()
+    c = 15.
+    gd = grad((x1, x2, x3), a, b, c=c)
+    gd_grad = tuple(
+        torch.randn(gx.shape) for gx in gd
+    )
+    
+    grad_bvar = gradient(smooth_bvar)
+    grad_var = gradient(smooth_var)
+    vhp = vHp((x1, x2, x3), a, b, c, *gd_grad)
+    vJgp_a, vJgp_b = vJgp((x1, x2, x3), a, b, c, *gd_grad)
+    
+    a_bvar = torch.nn.Parameter(a)
+    u_var = torch.nn.ParameterList((a, b))
+    x_bvar = tuple(xk.clone().requires_grad_(True) for xk in (x1, x2, x3))
+    x_var = Variable(
+        tuple(xk.clone().requires_grad_(True) for xk in (x1, x2, x3))
+    )
+    
+    # Within no_grad, 
+    with torch.no_grad():
+        gd_bvar = grad_bvar(x_bvar, a_bvar, b, c=c)
+        out_bvar = sum(
+            inner_product(gdk, gdk_grad) 
+            for gdk, gdk_grad in zip(gd_bvar, gd_grad)
+        )
+        gd_var = grad_var(x_var, u_var, c=c).data
+        out_var = sum(
+            inner_product(gdk, gdk_grad) 
+            for gdk, gdk_grad in zip(gd_var, gd_grad)
+        )
+    assert all(torch.allclose(gdk_b, gdk) for gdk_b, gdk in zip(gd_bvar, gd))
+    assert all(torch.allclose(gdk_v, gdk) for gdk_v, gdk in zip(gd_var, gd))
+    assert out_bvar.requires_grad is False
+    assert out_var.requires_grad is False
+    
+    
+    # Outside no_grad
+    gd_bvar = grad_bvar(x_bvar, a_bvar, b, c=c)
+    out_bvar = sum(
+        inner_product(gdk, gdk_grad) 
+        for gdk, gdk_grad in zip(gd_bvar, gd_grad)
+    )
+    gd_var = grad_var(x_var, u_var, c=c).data
+    out_var = sum(
+        inner_product(gdk, gdk_grad) 
+        for gdk, gdk_grad in zip(gd_var, gd_grad)
+    )
+    out_bvar.backward()
+    out_var.backward()
+    
+    assert x_var.data[0].grad is None and torch.norm(vhp[0]) < 1e-6
+    assert torch.allclose(x_var.data[1].grad, vhp[1])
+    assert x_var.data[2].grad is None and torch.norm(vhp[2]) < 1e-6
+    
+    assert x_bvar[0].grad is None and torch.norm(vhp[0]) < 1e-6
+    assert torch.allclose(x_bvar[1].grad, vhp[1])
+    assert x_bvar[2].grad is None and torch.norm(vhp[2]) < 1e-6
+    
+    assert torch.allclose(a_bvar.grad, vJgp_a)
+    assert torch.allclose(u_var[0].grad, vJgp_a)
+    assert torch.allclose(u_var[1].grad, vJgp_b)
+    
 
 
 def test_backend_gradient():

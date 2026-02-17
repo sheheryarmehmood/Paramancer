@@ -7,8 +7,8 @@ from .types import (
     MomentumSchedType, LineSearchSchedType, MetricSpec,
     StepsizeSchedTypes, ApplyType, FlatSpec, TupleSpec,
     NestedSpec, SpecType, FlatParameter, TupleParameter,
-    ParameterType, ParamObjType, ParamGradMapType,
-    ParamProxMapType, PObjType, PGradMapType, PLinOpType,
+    ParameterType, ParamSmoothObjType, ParamGradMapType,
+    ParamProxMapType, PSmoothObjType, PGradMapType, PLinOpType,
 )
 from .util import (
     is_tensor, is_tuple_of_tensors, is_nested_variable, is_valid_variable,
@@ -25,8 +25,8 @@ __all__ = [
     "MomentumSchedType", "LineSearchSchedType", "MetricSpec",
     "StepsizeSchedTypes", "ApplyType", "FlatSpec", "TupleSpec",
     "NestedSpec", "SpecType", "FlatParameter", "TupleParameter",
-    "ParameterType", "ParamObjType", "ParamGradMapType", "ParamProxMapType",
-    "PObjType", "PGradMapType", "PLinOpType",
+    "ParameterType", "ParamSmoothObjType", "ParamGradMapType", "ParamProxMapType",
+    "PSmoothObjType", "PGradMapType", "PLinOpType",
     "is_tensor", "is_tuple_of_tensors", "is_nested_variable",
     "is_valid_variable", "flatten", "unflatten",
     "Variable",

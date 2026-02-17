@@ -1,6 +1,7 @@
 from __future__ import annotations
 from tqdm import tqdm
 import torch
+from typing import Any
 
 from ..variable import Variable
 from .step import (
@@ -10,7 +11,7 @@ from .step import (
 )
 from .util import OptimizationResult, to_float_scalar
 from ..variable.types import (
-    SmoothObjType, GradMapType, ProxMapType, LinOpType,
+    PSmoothObjType, PGradMapType, ProxMapType, LinOpType,
     MomentumSchedType, MetricSpec,
     ScalarLike, FlatVariable, TupleVariable, VariableLike
 )
@@ -38,12 +39,16 @@ class Optimizer:
         self.result = None
     
     def __call__(
-        self, x_init: VariableLike, iters: int | None = None
+        self, x_init: VariableLike, *args: Any,
+        iters: int | None = None, **kwargs: Any
     ) -> VariableLike:
-        return self.run(x_init, iters)
+        return self.run(x_init, *args, iters=iters, **kwargs)
     
     @Variable.ensure_var_input
-    def run(self, x_init: Variable, iters: None | int = None) -> Variable:
+    def run(
+        self, x_init: VariableLike, *args: Any,
+        iters: int | None = None, **kwargs: Any
+    ) -> Variable:
         
         x_curr = x_init.clone()
         if self.store_history:
@@ -58,7 +63,7 @@ class Optimizer:
             pbar = tqdm(pbar)
         metric_val = None
         for k in pbar:
-            x_curr = self.step(x_curr)
+            x_curr = self.step(x_curr, *args, **kwargs)
             
             if self.store_history:
                 self.history.append(x_curr.clone())
@@ -105,19 +110,21 @@ class NeumannSeries(Optimizer):
         super().__init__(step, tol, iters, metric, store_history, verbose)
     
     def __call__(
-        self, init: VariableLike | None = None, iters: int | None = None
+        self,
+        *args: Any, init: VariableLike | None = None,
+        iters: int | None = None, **kwargs: Any
     ) -> VariableLike:
         if init is None:
             init = torch.zeros_like(self.step.vector.data)
-        return self.run(init, iters)
+        return self.run(init, *args, iters=iters, **kwargs)
 
 
 class GradientDescent(Optimizer):
     def __init__(
         self,
         stepsize: ScalarLike,
-        smooth_obj: SmoothObjType | None = None,
-        grad_map: GradMapType | None = None,
+        smooth_obj: PSmoothObjType | None = None,
+        grad_map: PGradMapType | None = None,
         tol: float = 1e-5,
         iters: int = 100,
         metric: MetricSpec | None = None,
@@ -137,8 +144,8 @@ class HeavyBall(Optimizer):
         self,
         stepsize: ScalarLike,
         momentum: ScalarLike,
-        smooth_obj: SmoothObjType | None = None,
-        grad_map: GradMapType | None = None,
+        smooth_obj: PSmoothObjType | None = None,
+        grad_map: PGradMapType | None = None,
         tol: float = 1e-5,
         iters: int = 100,
         metric: MetricSpec | None = None,
@@ -156,8 +163,8 @@ class AcceleratedGradient(Optimizer):
     def __init__(
         self,
         stepsize: ScalarLike,
-        smooth_obj: SmoothObjType | None = None,
-        grad_map: GradMapType | None = None,
+        smooth_obj: PSmoothObjType | None = None,
+        grad_map: PGradMapType | None = None,
         momentum_scheduler: MomentumSchedType | None = None,
         tol: float = 1e-5,
         iters: int = 100,
@@ -180,8 +187,8 @@ class ProximalGradient(Optimizer):
         self,
         stepsize: ScalarLike,
         prox_map: ProxMapType,
-        smooth_obj: SmoothObjType | None = None,
-        grad_map: GradMapType | None = None,
+        smooth_obj: PSmoothObjType | None = None,
+        grad_map: PGradMapType | None = None,
         tol: float = 1e-5,
         iters: int = 100,
         metric: MetricSpec | None = None,
@@ -201,8 +208,8 @@ class FISTA(Optimizer):
         self,
         stepsize: ScalarLike,
         prox_map: ProxMapType,
-        smooth_obj: SmoothObjType | None = None,
-        grad_map: GradMapType | None = None,
+        smooth_obj: PSmoothObjType | None = None,
+        grad_map: PGradMapType | None = None,
         momentum_scheduler: MomentumSchedType | None = None,
         tol: float = 1e-5,
         iters: int = 100,
@@ -249,8 +256,10 @@ class PDHG(Optimizer):
         self,
         x_init_primal: VariableLike,
         x_init_dual: VariableLike,
-        iters: int | None = None
+        *args: Any,
+        iters: int | None = None,
+        **kwargs: Any
     ) -> VariableLike:
         x_init = Variable.from_pdhg(x_init_primal, x_init_dual)
-        return self.run(x_init, iters)
+        return self.run(x_init, *args, iters=iters, **kwargs)
 

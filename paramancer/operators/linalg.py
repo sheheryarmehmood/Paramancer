@@ -1,7 +1,12 @@
 from __future__ import annotations
 import torch
 
-from ..variable.types import BaseVariableType, PLinOpType
+from ..variable import Variable
+from ..variable.types import (
+    TupleVariable, BaseVariableType,
+    TupleParameter, ParameterType,
+    PLinOpType
+)
 
 
 def adjoint(
@@ -32,6 +37,15 @@ def adjoint(
         - The returned adjoint is defined with respect to the standard 
           Euclidean inner product on the involved tensor spaces.
         - Handles both single-tensor and tuple/list-tensor input spaces.
+        - The type of `zero_el` determines the input/output type:
+          if `zero_el` is `Variable`, then `lin_op` and `lin_op_adj` should
+          receive `Variable` and `lin_op_adj` returns `Variable`. Otherwise
+          they use `BaseVariableType`.
+        - The adjoint is differentiable only when:
+          - `lin_op_adj` is called with grad enabled (i.e., not inside
+            `with torch.no_grad(): ...`), and
+          - `y` (or any element of `args[0]` when it is a `ParameterType`)
+            has `requires_grad=True`.
 
     Example:
         >>> import torch
@@ -44,17 +58,43 @@ def adjoint(
         >>> lin_op_adj(y)  # Equivalent to A.T @ y
         tensor([4., 6.])
     """
-    multi_var_op = isinstance(zero_el, (tuple, list))
+    zero_was_var = isinstance(zero_el, Variable)
+    zero_data = zero_el.data if zero_was_var else zero_el
+
+    multi_var_op = isinstance(zero_data, (tuple, list))
     if multi_var_op:
-        typ = type(zero_el)
-        zero_el = typ([z.detach().clone() for z in zero_el])
+        typ = type(zero_data)
+        zero_el = typ([z.detach().clone() for z in zero_data])
     else:
-        zero_el = zero_el.detach().clone()
-    def lin_op_adj(inps, *args):
-        inputs = inps + args if isinstance(inps, tuple) else (inps, *args)
-        create_graph = any(inp.requires_grad for inp in inputs)
-        return torch.autograd.functional.vjp(
-            lambda *zl: lin_op(zl if multi_var_op else zl[0], *args),
-            zero_el, inps, create_graph=create_graph
-        )[1]
+        zero_el = zero_data.detach().clone()
+
+    def lin_op_adj(y: BaseVariableType, *args, **kwargs):
+        outer_grad_enabled = torch.is_grad_enabled()
+        if zero_was_var and not isinstance(y, Variable):
+            raise TypeError("Expected `y` to be Variable when zero_el is Variable.")
+        if not zero_was_var and isinstance(y, Variable):
+            raise TypeError("Expected `y` to be BaseVariableType when zero_el is not Variable.")
+
+        u_flat: tuple[torch.Tensor, ...] = ()
+        if len(args) > 0 and isinstance(args[0], ParameterType):
+            u_flat = (
+                tuple(args[0]) if isinstance(args[0], TupleParameter) 
+                else (args[0],)
+            )
+        y_data = y.data if isinstance(y, Variable) else y
+        ys = (y_data,) if isinstance(y_data, torch.Tensor) else y_data
+        
+        create_graph = outer_grad_enabled and (
+            any(inp.requires_grad for inp in ys) or
+            any(u_f.requires_grad for u_f in u_flat)
+        )
+        
+        with torch.enable_grad():
+            def func(*zl):
+                return lin_op(zl if multi_var_op else zl[0], *args, **kwargs)
+            out = torch.autograd.functional.vjp(
+                func, zero_el, y_data, create_graph=create_graph
+            )[1]
+        
+        return Variable(out) if zero_was_var else out
     return lin_op_adj

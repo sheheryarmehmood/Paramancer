@@ -1,9 +1,10 @@
+from __future__ import annotations
 import torch
 from paramancer.operators import adjoint
 import pytest
 
 
-def testadjoint_single_input():
+def test_adjoint_single_input():
     A = torch.tensor([[1., 2.], [3., 4.]])
     def lin_op(x): return A @ x
     zero_el = torch.zeros(2)
@@ -11,7 +12,7 @@ def testadjoint_single_input():
     y = torch.tensor([1., 1.])
     assert torch.allclose(lin_op_adj(y), A.T @ y, atol=1e-5)
 
-def testadjoint_multiple_input():
+def test_adjoint_multiple_input():
     def lin_op(x): return sum(x)
     num_inputs = 5
     input_size = 15
@@ -23,21 +24,28 @@ def testadjoint_multiple_input():
         torch.allclose(x, y, atol=1e-5) for x, y in zip(adj_out, lin_op_adj(z))
     )
 
-def testadjoint_differentiablity():
+def test_adjoint_differentiablity():
     rows, cols = 15, 10
     A = torch.rand(rows, cols)
-    def lin_op(x): return A @ x
+    def lin_op(x, A, t=4): return t * A @ x
     zero_el = torch.zeros(cols)
     lin_op_adj = adjoint(lin_op, zero_el)
+    kw = 5
     
-    A.requires_grad = True
+    Ap = torch.nn.Parameter(A)
+    
     y = torch.randn(rows, requires_grad=True)
-    lin_op_adj(y).sum().backward()
+    with torch.no_grad():
+        out = lin_op_adj(y, Ap, t=kw).sum()
+    assert out.requires_grad is False
+    
+    out = lin_op_adj(y, Ap, t=kw).sum()
+    out.backward()
     
     ones = torch.ones(cols)
     
-    assert torch.allclose(y.grad, A @ ones, atol=1e-5)
-    assert torch.allclose(A.grad, torch.outer(y, ones), atol=1e-5)
+    assert torch.allclose(y.grad, kw * A @ ones, atol=1e-5)
+    assert torch.allclose(Ap.grad, kw * torch.outer(y, ones), atol=1e-5)
 
 def test_parametricadjoint():
     rows, cols, cols1, cols2 = 15, 20, 10, 5

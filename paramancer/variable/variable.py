@@ -137,8 +137,8 @@ class Variable:
     
     @staticmethod
     def wrap(fn):
-        def wrapped_fn(x: Variable) -> Variable:
-            return Variable(fn(x.data))
+        def wrapped_fn(x: Variable, *args, **kwargs) -> Variable:
+            return Variable(fn(x.data, *args, **kwargs))
         return wrapped_fn
     
     @staticmethod

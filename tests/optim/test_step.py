@@ -9,27 +9,32 @@ from paramancer.optim.step import ProxGradStep, FISTAStep, PDHGStep
 from paramancer.operators.linalg import adjoint
 
 
-def test_gd_step_no_grad_map():
-    def smooth_obj(x):
+def test_gd_step_no_grad_map_with_args_and_kwargs():
+    def smooth_obj(x, a, b=5):
         x1, x2 = x
-        return x1.sum() + 0.5 * la.norm(x2)**2
+        return b*x1.sum() + 0.5 * la.norm(x2)**2 + a
     
-    def grad_map(x):
+    def grad_map(x, b=5):
         x1, x2 = x
-        return torch.ones_like(x1), x2
+        return b * torch.ones_like(x1), x2
     
+    a, b = 10, 20
     ss = torch.tensor(1.)
     x_init = torch.randn(3, 4, 2), torch.randn(10, 7)
     
     xk = tuple(xi for xi in x_init)
     for _ in range(3):
-        xk = tuple(x - ss * gd for x, gd in zip(xk, grad_map(xk)))
+        xk = tuple(x - ss * gd for x, gd in zip(xk, grad_map(xk, b=b)))
     
     gd_step_obj = GDStep(ss, smooth_obj=smooth_obj)
-    xk_obj = gd_step_obj(gd_step_obj(gd_step_obj(x_init)))
+    xk_obj = x_init
+    for _ in range(3):
+        xk_obj = gd_step_obj(xk_obj, a, b=b)
     
     gd_step_grad = GDStep(ss, grad_map=grad_map)
-    xk_grad = gd_step_grad(gd_step_grad(gd_step_grad(x_init)))
+    xk_grad = x_init
+    for _ in range(3):
+        xk_grad = gd_step_grad(xk_grad, b=b)
     
     assert torch.allclose(xk[0], xk_grad[0])
     assert torch.allclose(xk_grad[0], xk_obj[0])
@@ -313,17 +318,18 @@ def test_markovian_property():
     assert not fista_step.is_markovian()
 
 
-def test_pdhg_tensor_tuples():
+def test_pdhg_tensor_tuples_with_args_and_kwargs():
     def prox_primal(prim):
         return prim[0] ** 2, prim[1] + prim[2], prim[1] - prim[2]
     def prox_dual(dual):
         return dual[0], 2 * dual[1], dual[2] / 2
-    def lin_op(prim):
+    def lin_op(prim, a, b, c=4):
         return (
-            prim[1][:2] + 4*prim[2][2:4] - prim[0][-2:],
-            prim[0][1:4] + prim[2][2:],
-            prim[0][2:9]
+            prim[1][:2] + c * prim[2][2:4] - prim[0][-2:],
+            a * prim[0][1:4] + prim[2][2:],
+            prim[0][2:9] / b
         )
+    a, b, c = 5, 3, 10
     zero_el = (torch.zeros(11), torch.zeros(5), torch.zeros(5))
     lin_op_adj = adjoint(lin_op, zero_el)
     ss_p = torch.tensor(0.1)
@@ -333,19 +339,21 @@ def test_pdhg_tensor_tuples():
     dual_prev = (torch.randn(2), torch.rand(3), torch.randn(7))
     
     prim_next_out = prox_primal(tuple(
-        p - ss_p * lad for p, lad in zip(prim_prev, lin_op_adj(dual_prev))
+        p - ss_p * lad for p, lad in 
+        zip(prim_prev, lin_op_adj(dual_prev, a, b, c=c))
     ))
     xs_pt = tuple(
         2 * x_p1 - x_p for x_p1, x_p in zip(prim_next_out, prim_prev)
     )
     dual_next_out = prox_dual(tuple(
-        d + ss_d * lp for d, lp in zip(dual_prev, lin_op(xs_pt))
+        d + ss_d * lp for d, lp in 
+        zip(dual_prev, lin_op(xs_pt, a, b, c=c))
     ))
     
     pdhg_step = PDHGStep(
         ss_p, ss_d, prox_primal, prox_dual, lin_op, zero_el=zero_el
     )
-    xs_p1s, xs_d1s = pdhg_step((prim_prev, dual_prev))
+    xs_p1s, xs_d1s = pdhg_step((prim_prev, dual_prev), a, b, c=c)
     
     assert torch.allclose(xs_p1s[0], prim_next_out[0], atol=1e-5)
     assert torch.allclose(xs_p1s[1], prim_next_out[1], atol=1e-5)

@@ -5,85 +5,95 @@ from typing import Any
 
 from ..variable import Variable, flatten, unflatten
 from ..variable.types import (
-    BaseVariableType, PObjType, PGradMapType, ParameterType
+    BaseVariableType, TupleParameter, ParameterType,
+    PSmoothObjType, PGradMapType
 )
 
 
 # Decide whether to build a higher-order graph
 # (If any input requires grad, we want the gradient itself to be
 # differentiable.)
-def _req_grad(obj: Any) -> bool:
-    return isinstance(obj, torch.Tensor) and obj.requires_grad
+# def _req_grad(obj: Any) -> bool:
+#     return isinstance(obj, torch.Tensor) and obj.requires_grad
 
-def _req_grad_(vars: tuple[torch.Tensor, ...], rgs: bool | tuple[bool, ...]):
+def _set_req_grad(
+    vars: tuple[torch.Tensor, ...], rgs: bool | tuple[bool, ...]
+):
     if isinstance(rgs, bool):
         rgs = (rgs,) * len(vars)
     for var, rg in zip(vars, rgs):
         var.requires_grad_(rg)
 
-def gradient(smooth: PObjType) -> PGradMapType:
+def gradient(smooth: PSmoothObjType) -> PGradMapType:
     """
     Return a callable that differentiates `smooth` with respect to its first 
     argument `x`.
 
     Expected objective signature:
-        smooth(x, params=None, *rest) -> torch.Tensor
+        smooth(x, *args, **kwargs) -> torch.Tensor
 
     The returned function has signature:
-        grad(x, params=None, *rest) -> grad_x
+        grad(x, *args, **kwargs) -> grad_x
 
     Notes:
-    - `x` may be a `Variable`, a Tensor, or a tuple of Tensors 
-    (BaseVariableLike).
+    - `x` may be a `Variable`, a Tensor, or a tuple of Tensors
+      (BaseVariableLike).
     - Gradients are computed w.r.t. `x` only.
-    - If any of (x, params, rest) require gradients, the returned gradient is 
-    created with `create_graph=True` so it can be differentiated again (e.g. 
-    for hypergradients).
-    - Differentiable inputs are expected to be leaf tensors; non-leaf inputs 
-    may error.
+    - When `len(args) > 0`, `args[0]` can optionally be of `ParameterType`.
+    - The returned gradient is differentiable only when:
+      - `grad` is called with grad enabled (i.e., not inside
+        `with torch.no_grad(): ...`), and
+      - `x` (or any element of `args[0]` when it is a `ParameterType`) has
+        `requires_grad=True`.
+    - If `x` is a `Variable`, `smooth` and `grad` receives a `Variable` and
+      `grad` returns a `Variable`. If `x` is `BaseVariableType`, `smooth` and 
+      `grad` receives a `BaseVariableType` and `grad` returns a 
+      `BaseVariableType`.
+    - Differentiable inputs are expected to be leaf tensors; non-leaf inputs
+      may error.
     """
 
-    def grad_s(x, params=None, *rest):
+    def grad_s(x, *args, **kwargs):
+        outer_grad_enabled = torch.is_grad_enabled()
         x_was_var = isinstance(x, Variable)
         x_data = x.data if x_was_var else x
-        
 
         # Flatten x into a tuple of tensors we can hand to autograd.grad
         x_flat, x_spec = flatten(x_data)
-        
-        # Store previous requries_grad of `x` and set them all to `True`.
-        rgs = tuple(x_f.requires_grad for x_f in x_flat)
-        _req_grad_(x_flat, True)
 
         # Optionally flatten params if they are a ParameterType
         # (for create_graph detection only)
-        prm_flat: tuple[torch.Tensor, ...] = ()
-        if params is not None and isinstance(params, ParameterType):
-            # ParameterList is iterable; a single Parameter is not
-            prm_flat = (
-                tuple(params) if isinstance(params, torch.nn.ParameterList) 
-                else (params,)
+        u_flat: tuple[torch.Tensor, ...] = ()
+        if len(args) > 0 and isinstance(args[0], ParameterType):
+            u_flat = (
+                tuple(args[0]) if isinstance(args[0], TupleParameter) 
+                else (args[0],)
             )
+        
+        # Store previous requries_grad of `x` and set them all to `True`.
+        rgs = tuple(x_f.requires_grad for x_f in x_flat)
+        _set_req_grad(x_flat, True)
 
-        create_graph = (
-            any(_req_grad(t) for t in x_flat) or 
-            any(_req_grad(t) for t in prm_flat)
+        create_graph = outer_grad_enabled and (
+            any(rg for rg in rgs) or any(u_f.requires_grad for u_f in u_flat)
         )
-        create_graph = create_graph or any(_req_grad(r) for r in rest)
 
         # Compute objective value and grads w.r.t. x_flat
         with torch.enable_grad():
             x_unflat = unflatten(x_flat, x_spec)
             x_in = Variable(x_unflat) if x_was_var else x_unflat
-            out = (
-                smooth(x_in, *rest).sum() if params is None
-                else smooth(x_in, params, *rest).sum()
-            )
+            out = smooth(x_in, *args, **kwargs).sum()
 
-        gd = torch.autograd.grad(out, x_flat, create_graph=create_graph)
+        gd = torch.autograd.grad(
+            out, x_flat, create_graph=create_graph, allow_unused=True
+        )
+        gd = tuple(
+            torch.zeros_like(x_f) if g is None else g
+            for x_f, g in zip(x_flat, gd)
+        )
         
         # restore the old requries_grad.
-        _req_grad_(x_flat, rgs)
+        _set_req_grad(x_flat, rgs)
 
         # Unflatten gradient back to the same structure as x
         out_grad = unflatten(gd, x_spec)
@@ -144,7 +154,9 @@ def _gradient(
                 inp.requires_grad_(True)
         with torch.enable_grad():
             out = smooth(*args).sum()
-        gd = torch.autograd.grad(out, inps, create_graph=create_graph)
+        gd = torch.autograd.grad(
+            out, inps, create_graph=create_graph, allow_unused=True
+        )
         if len(gd) == 1:
             gd = gd[0]
         

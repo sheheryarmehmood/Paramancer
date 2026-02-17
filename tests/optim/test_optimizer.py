@@ -9,26 +9,28 @@ from paramancer.operators.norms import l2_sq
 
 
 # Testing Gradient Descent and Heavy-ball
-def test_gd_and_hb():
+def test_gd_and_hb_with_args_kwargs():
     M, N = 10, 5
     A, b = torch.rand(M, N), torch.randn(M)
-    lip = la.matrix_norm(A.T @ A, ord=2)
-    mu = la.matrix_norm(A.T @ A, ord=-2)
-    xm = la.solve(A.T @ A, A.T @ b)
+    r = torch.tensor(1.)
+    lip = la.matrix_norm(A.T @ A, ord=2) + r
+    mu = la.matrix_norm(A.T @ A, ord=-2) + r
+    xm = la.solve(A.T @ A + r * torch.eye(N), A.T @ b)
+    iters = 1000
     
     ss_gd = 2 / (lip + mu)
     sql, sqm = lip.sqrt(), mu.sqrt()
     ss_hb = (2 / (sql + sqm)) ** 2
     mm = ((sql - sqm) / (sql + sqm)) ** 2
     
-    def grad_map(x): return A.T @ (A @ x - b)
+    def grad_map(x, A, b, reg=r): return A.T @ (A @ x - b) + reg * x
     
-    optim_gd = GradientDescent(ss_gd, grad_map=grad_map)
+    optim_gd = GradientDescent(ss_gd, grad_map=grad_map, iters=iters)
     optim_hb = HeavyBall(ss_hb, mm, grad_map=grad_map)
     
     x_init = torch.randn(N)
-    xm_gd = optim_gd(x_init, iters=10000)
-    xm_hb = optim_hb(x_init, iters=10000)
+    xm_gd = optim_gd(x_init, A, b, reg=r)           # Don't pass `iters`
+    xm_hb = optim_hb(x_init, A, b, iters=iters)     # Don't pass `reg=r`
     
     assert torch.allclose(xm, xm_gd, rtol=1e-3, atol=1e-6)
     assert torch.allclose(xm, xm_hb, rtol=1e-4, atol=1e-6)
@@ -54,7 +56,7 @@ def test_nag_unrolling():
     
     x_sol = torch.randn(N)
     
-    x_sol = optim_nag(x_sol, 10000)
+    x_sol = optim_nag(x_sol, iters=10000)
     x_sol.backward(xm_grad)
     
     assert torch.allclose(A.grad, A_grad, rtol=1e-3, atol=1e-5)
