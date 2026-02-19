@@ -45,6 +45,8 @@ def gradient(smooth: PSmoothObjType) -> PGradMapType:
         `with torch.no_grad(): ...`), and
       - `x` (or any element of `args[0]` when it is a `ParameterType`) has
         `requires_grad=True`.
+      When the above conditions hold, the returned gradient is differentiated
+      with respect to every input whose requires_grad is set to `True`.
     - If `x` is a `Variable`, `smooth` and `grad` receives a `Variable` and
       `grad` returns a `Variable`. If `x` is `BaseVariableType`, `smooth` and 
       `grad` receives a `BaseVariableType` and `grad` returns a 
