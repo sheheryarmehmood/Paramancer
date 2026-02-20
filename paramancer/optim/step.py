@@ -9,7 +9,7 @@ from ..operators.linalg import adjoint
 from ..operators.grad import gradient
 from ..variable.types import (
     PSmoothObjType, PGradMapType, ProxMapType, LinOpType,
-    MomentumSchedType, StepsizeSchedTypes,
+    MomentumSchedType, StepsizeSchedType,
     ScalarLike, BaseVariableType, VariableLike
 )
 
@@ -91,7 +91,7 @@ class GDStep(OptimizerStep):
         stepsize: ScalarLike,
         smooth_obj: PSmoothObjType | None = None,
         grad_map: PGradMapType | None = None,
-        stepsize_scheduler: StepsizeSchedTypes | None = None,
+        stepsize_scheduler: StepsizeSchedType | None = None,
         linesearch: bool = True,
         tracking: bool = False
     ):
@@ -108,7 +108,6 @@ class GDStep(OptimizerStep):
         x_new = x_curr + self.stepsize * direction
         if self._residual_tracking:
             self._residual = x_new - x_curr
-        # breakpoint()
         return x_new
     
     def _init_grad_map(self, smooth_obj, grad_map):

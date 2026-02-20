@@ -2,10 +2,12 @@ import torch
 import torch.autograd.functional as agF
 import torch.linalg as la
 import pytest
-from paramancer.operators.norms import l2
-from paramancer.optim import GradientDescent, HeavyBall, AcceleratedGradient
-from paramancer.optim import ProximalGradient, FISTA, PDHG
-from paramancer.operators.norms import l2_sq
+from paramancer.operators.norms import l2, l2_sq
+from paramancer.optim import (
+    NeumannSeries,
+    GradientDescent, HeavyBall, AcceleratedGradient,
+    ProximalGradient, FISTA, PDHG
+)
 
 
 # Testing Gradient Descent and Heavy-ball
@@ -129,6 +131,22 @@ def test_nag_with_gradient_metric():
     # For that many iterations, the algorithm should converge
     assert nag_optim.result.converged
     assert torch.allclose(x_nag, xm, atol=1e-4)
+
+
+def test_neumann_nxn():
+    M, N, P, K = 100, 5, 3, 10000
+    A = torch.rand(M, N)
+    Q = A.T @ A
+    matrix = 0.9 * Q / la.matrix_norm(Q, ord=2)
+    vector = torch.randn(N, P).squeeze()
+    
+    true_sol = la.solve(torch.eye(N) - matrix, vector)
+    neumann = NeumannSeries(
+        lambda x: matrix @ x, vector, iters=K, metric="default", tol=1e-9
+    )
+    neu_sol = neumann()
+    
+    assert torch.allclose(true_sol, neu_sol, atol=1e-5)
 
 
 def test_pdhg():

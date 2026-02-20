@@ -1,43 +1,43 @@
 import torch
 import pytest
 
-from paramancer.bloptim.step import NesterovMarkovParamStep
+from paramancer.bloptim.step import NesterovParamMarkovStep
 from paramancer.optim.step import NesterovStep
 
 
-def test_nesterov_markov_param_step():
-    def grad_map(vars):
-        x, y = vars
-        return x - a, b
+def test_nesterov_param_markov_step():
+    def grad_map(x):
+        x1, x2 = x
+        return x1 - u1, u2 * x2
     
-    def grad_map_prm(vars, prms):
-        x, y = vars
-        a, b = prms
-        return x - a, b
+    def grad_map_prm(vars, u):
+        x1, x2 = vars
+        u1, u2 = u
+        return x1 - u1, u2 * x2
     
-    Nx, Ny = 10, 5
-    a, b = torch.randn(Nx), torch.rand(Ny)
-    
+    N1, N2 = 10, 5
+    u1, u2 = torch.randn(N1), torch.rand(N2)
+    iters = 5
     ss = torch.Tensor([0.1]).squeeze()
     
-    step = NesterovStep(ss, grad_map)
-    mp_step = NesterovMarkovParamStep(ss, grad_map_prm) # mp -> MarkovParam
+    step = NesterovStep(ss, grad_map=grad_map)
+    pm_step = NesterovParamMarkovStep(ss, grad_map_prm=grad_map_prm)
     
-    x_curr = torch.randn(Nx)
-    y_curr = torch.randn(Ny)
+    x1, x2 = torch.randn(N1), torch.randn(N2)
     
-    x_prev = x_curr.clone()
-    y_prev = y_curr.clone()
+    x_curr = x1, x2
+    for _ in range(iters):
+        x_curr = step(x_curr)
+    x1_new, x2_new = x_curr
     
-    x_new, y_new = step(step(step((x_curr, y_curr))))
+    x_prev = x1.clone(), x2.clone() 
+    z_curr = x_curr, x_prev
+    u = u1, u2
+    for _ in range(iters):
+        z_curr = pm_step(z_curr, u)
+    x1_new_pm, x2_new_pm = z_curr[0]
     
-    def m_step(z):
-        return mp_step(z, (a, b))
-    (x_new_mp, y_new_mp), _ = m_step(m_step(m_step(
-        ((x_curr, y_curr), (x_prev, y_prev))
-    )))
-    
-    assert torch.allclose(x_new_mp, x_new)
-    assert torch.allclose(y_new_mp, y_new)
+    assert torch.allclose(x1_new_pm, x1_new)
+    assert torch.allclose(x2_new_pm, x2_new)
     
 

@@ -38,7 +38,7 @@ MomentumSchedType: TypeAlias = VoidToScal
 LineSearchSchedType: TypeAlias = BVarXBVarToScal
 
 MetricSpec: TypeAlias = Literal["default"] | MetricFnType
-StepsizeSchedTypes: TypeAlias = MomentumSchedType | LineSearchSchedType
+StepsizeSchedType: TypeAlias = MomentumSchedType | LineSearchSchedType
 
 
 # for flattened variable to be passed to `OptimizerID.apply`

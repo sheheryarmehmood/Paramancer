@@ -137,7 +137,7 @@ class Variable:
     
     @staticmethod
     def wrap(fn):
-        def wrapped_fn(x: Variable, *args, **kwargs) -> Variable:
+        def wrapped_fn(x: VariableLike, *args, **kwargs) -> VariableLike:
             return Variable(fn(x.data, *args, **kwargs))
         return wrapped_fn
     
@@ -145,11 +145,10 @@ class Variable:
     def ensure_var_input(fn):
         @wraps(fn)
         def wrapper(self, x_curr, *args, **kwargs):
-            self._input_is_variable = isinstance(x_curr, Variable)
-            if not self._input_is_variable:
-                x_curr = Variable(x_curr)
-            out = fn(self, x_curr, *args, **kwargs)
-            return out if self._input_is_variable else out.data
+            _input_is_variable = isinstance(x_curr, Variable)
+            x_var = x_curr if _input_is_variable else Variable(x_curr)
+            out = fn(self, x_var, *args, **kwargs)
+            return out if _input_is_variable else out.data
         return wrapper
     
     @staticmethod
