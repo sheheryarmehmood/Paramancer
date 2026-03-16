@@ -4,7 +4,7 @@ import torch
 from ..variable import Variable
 from ..variable.types import (
     TupleVariable, BaseVariableType,
-    TupleParameter, ParameterType,
+    ParameterList, ParameterType,
     PLinOpType
 )
 
@@ -78,7 +78,7 @@ def adjoint(
         u_flat: tuple[torch.Tensor, ...] = ()
         if len(args) > 0 and isinstance(args[0], ParameterType):
             u_flat = (
-                tuple(args[0]) if isinstance(args[0], TupleParameter) 
+                tuple(args[0]) if isinstance(args[0], ParameterList) 
                 else (args[0],)
             )
         y_data = y.data if isinstance(y, Variable) else y

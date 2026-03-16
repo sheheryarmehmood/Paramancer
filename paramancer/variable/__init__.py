@@ -6,7 +6,7 @@ from .types import (
     GradMapType, ProxMapType, LinOpType, MetricFnType,
     MomentumSchedType, LineSearchSchedType, MetricSpec,
     StepsizeSchedType, ApplyType, FlatSpec, TupleSpec,
-    NestedSpec, SpecType, FlatParameter, TupleParameter,
+    NestedSpec, SpecType, FlatParameter, ParameterList,
     ParameterType, ParamSmoothObjType, ParamGradMapType,
     ParamProxMapType, PSmoothObjType, PGradMapType, PLinOpType,
 )
@@ -24,7 +24,7 @@ __all__ = [
     "GradMapType", "ProxMapType", "LinOpType", "MetricFnType",
     "MomentumSchedType", "LineSearchSchedType", "MetricSpec",
     "StepsizeSchedType", "ApplyType", "FlatSpec", "TupleSpec",
-    "NestedSpec", "SpecType", "FlatParameter", "TupleParameter",
+    "NestedSpec", "SpecType", "FlatParameter", "ParameterList",
     "ParameterType", "ParamSmoothObjType", "ParamGradMapType", "ParamProxMapType",
     "PSmoothObjType", "PGradMapType", "PLinOpType",
     "is_tensor", "is_tuple_of_tensors", "is_nested_variable",

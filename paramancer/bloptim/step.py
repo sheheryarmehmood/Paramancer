@@ -9,7 +9,7 @@ from ..optim.step import (
 from ..operators.grad import gradient
 from ..variable import Variable
 from ..variable.types import (
-    ScalarLike, VariableLike, VariableType, ParameterType,
+    ScalarLike, VariableLike, ParameterType,
     ParamSmoothObjType, ParamGradMapType, ParamProxMapType,
     MomentumSchedType, StepsizeSchedType
 )
@@ -72,7 +72,7 @@ class ParamMarkovStepMixin:
     @u_given.setter
     def u_given(self, u_in: ParameterType | None):
         """Ignores the incoming `u_in` when it is `None`"""
-        if u_in is not None:
+        if u_in is not None and u_in is not self._u_given:
             self._u_given = u_in
 
 

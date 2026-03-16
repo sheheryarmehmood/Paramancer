@@ -5,7 +5,7 @@ from typing import Any
 
 from ..variable import Variable, flatten, unflatten
 from ..variable.types import (
-    BaseVariableType, TupleParameter, ParameterType,
+    BaseVariableType, ParameterList, ParameterType,
     PSmoothObjType, PGradMapType
 )
 
@@ -68,7 +68,7 @@ def gradient(smooth: PSmoothObjType) -> PGradMapType:
         u_flat: tuple[torch.Tensor, ...] = ()
         if len(args) > 0 and isinstance(args[0], ParameterType):
             u_flat = (
-                tuple(args[0]) if isinstance(args[0], TupleParameter) 
+                tuple(args[0]) if isinstance(args[0], ParameterList) 
                 else (args[0],)
             )
         

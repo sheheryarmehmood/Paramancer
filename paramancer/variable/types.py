@@ -6,6 +6,7 @@ from torch import Tensor, nn
 
 if TYPE_CHECKING:
     from .variable import Variable
+    from .parameter import ParameterBundle
 
 
 # Types allowed for Variable construction
@@ -51,8 +52,14 @@ SpecType: TypeAlias = FlatSpec | TupleSpec | NestedSpec
 
 # Types allowed for Parameter
 FlatParameter = nn.Parameter
-TupleParameter = nn.ParameterList
-ParameterType = FlatParameter | TupleParameter
+TupleParameter = tuple[nn.Parameter, ...]
+ParameterList = nn.ParameterList
+ParameterType = FlatParameter | ParameterList
+
+IndexType: TypeAlias = int | tuple[int, ...]
+IndexMapType: TypeAlias = dict[str, IndexType]
+
+ParameterLike: TypeAlias = "ParameterType | ParameterBundle"
 
 P = ParamSpec("P")
 

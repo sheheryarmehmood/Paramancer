@@ -19,14 +19,13 @@ class Variable:
     while preserving the input structure.
     """
 
-    def __init__(self, data: VariableType, level: str = "lower"):
+    def __init__(self, data: VariableType):
         if not is_valid_variable(data):
             raise TypeError(
                 "Unsupported VariableType. Expected Tensor, Tuple[Tensor,...],"
                 " or Tuple[Tuple[Tensor,...], Tuple[Tensor,...]]."
             )
         self._data = data
-        self._level = level
     
     def flatten(self):
         return flatten(self.data)
