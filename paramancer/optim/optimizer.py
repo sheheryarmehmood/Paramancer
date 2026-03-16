@@ -1,5 +1,4 @@
 from __future__ import annotations
-from tqdm import tqdm
 import torch
 from typing import Any
 
@@ -9,7 +8,7 @@ from .step import (
     AffineStep, GDStep, PolyakStep, NesterovStep,
     ProxGradStep, FISTAStep, PDHGStep
 )
-from .util import OptimizationResult, to_float_scalar
+from .util import OptimizationResult, to_float_scalar, ensure_var_input
 from ..variable.types import (
     PSmoothObjType, PGradMapType, ProxMapType, LinOpType,
     MomentumSchedType, MetricSpec,
@@ -44,7 +43,7 @@ class Optimizer:
     ) -> VariableLike:
         return self.run(x_init, *args, iters=iters, **kwargs)
     
-    @Variable.ensure_var_input
+    @ensure_var_input
     def run(
         self, x_init: VariableLike, *args: Any,
         iters: int | None = None, **kwargs: Any
@@ -60,6 +59,7 @@ class Optimizer:
         converged = False
         pbar = range(self.iters)
         if self.verbose:
+            from tqdm import tqdm
             pbar = tqdm(pbar)
         metric_val = None
         for k in pbar:
@@ -262,4 +262,3 @@ class PDHG(Optimizer):
     ) -> VariableLike:
         x_init = Variable.from_pdhg(x_init_primal, x_init_dual)
         return self.run(x_init, *args, iters=iters, **kwargs)
-

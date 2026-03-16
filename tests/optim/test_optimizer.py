@@ -152,7 +152,7 @@ def test_neumann_nxn():
 def test_pdhg():
     M = N = 2
     A, b = torch.rand(M, N), torch.randn(M)
-    D1, D2 = torch.rand(2, 2), torch.rand(2, 2)
+    D1, D2 = torch.rand(2, N), torch.rand(2, N)
     reg = torch.tensor(0.2)
     
     K = torch.cat([D1, D2], dim=0)

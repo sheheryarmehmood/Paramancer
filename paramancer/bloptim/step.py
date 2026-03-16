@@ -6,6 +6,7 @@ from ..optim.step import (
     GDStep, PolyakStep, NesterovStep,
     ProxGradStep, FISTAStep
 )
+from ..optim.util import ensure_var_input
 from ..operators.grad import gradient
 from ..variable import Variable
 from ..variable.types import (
@@ -35,7 +36,7 @@ class ParamMarkovStepMixin:
     def __init__(self, u_in: ParameterType | None = None):
         self._u_given = u_in
     
-    @Variable.ensure_var_input
+    @ensure_var_input
     def step(
         self,
         x_curr: Variable,
@@ -204,6 +205,12 @@ class FISTAParamMarkovStep(
             self, stepsize, self._prox_map, grad_map=self._grad_map,
             tracking=tracking, momentum_scheduler=momentum_scheduler
         )
-    
 
+
+# Backwards-compatible aliases for the original public API.
+GDMarkovParamStep = GDParamMarkovStep
+PolyakMarkovParamStep = PolyakParamMarkovStep
+NesterovMarkovParamStep = NesterovParamMarkovStep
+ProxGradMarkovParamStep = ProxGradParamMarkovStep
+FISTAMarkovParamStep = FISTAParamMarkovStep
 

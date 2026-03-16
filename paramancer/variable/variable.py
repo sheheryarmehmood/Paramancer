@@ -2,7 +2,11 @@ from __future__ import annotations
 from functools import wraps
 import torch
 
-from .types import VariableType, VariableLike, ScalarLike, ApplyType, SpecType
+from .types import (
+    VariableType, VariableLike, BaseVariableLike,
+    ScalarLike, ApplyType, SpecType, P,
+    WrapperIn, WrapperOut, Owner
+)
 from .util import (
     flatten, unflatten, is_tensor, is_valid_variable
 )
@@ -136,26 +140,16 @@ class Variable:
     
     @staticmethod
     def wrap(fn):
-        def wrapped_fn(x: VariableLike, *args, **kwargs) -> VariableLike:
+        def wrapped_fn(x: Variable, *args, **kwargs) -> Variable:
             return Variable(fn(x.data, *args, **kwargs))
         return wrapped_fn
     
     @staticmethod
-    def ensure_var_input(fn):
-        @wraps(fn)
-        def wrapper(self, x_curr, *args, **kwargs):
-            _input_is_variable = isinstance(x_curr, Variable)
-            x_var = x_curr if _input_is_variable else Variable(x_curr)
-            out = fn(self, x_var, *args, **kwargs)
-            return out if _input_is_variable else out.data
-        return wrapper
-    
-    @staticmethod
     def _from_pair(
-        var1: VariableLike,
-        var2: VariableLike
+        var1: BaseVariableLike,
+        var2: BaseVariableLike
     ) -> VariableLike:
-        if type(var1) != type(var2):
+        if type(var1) is not type(var2):
             raise TypeError("The two elements should be of the same type")
         if isinstance(var1, Variable):
             return Variable((var1.data, var2.data))
@@ -163,14 +157,14 @@ class Variable:
     
     @staticmethod
     def from_momentum(
-        curr: VariableLike,
-        prev: VariableLike
+        curr: BaseVariableLike,
+        prev: BaseVariableLike
     ) -> VariableLike:
         return Variable._from_pair(curr, prev)
 
     @staticmethod
     def from_pdhg(
-        primal: VariableLike,
-        dual: VariableLike
+        primal: BaseVariableLike,
+        dual: BaseVariableLike
     ) -> VariableLike:
         return Variable._from_pair(primal, dual)

@@ -218,7 +218,7 @@ def test_fista_residual_value():
     x_curr = x0
     
     # Iter 1
-    x_curr = fista_step(x_curr)
+    x_curr = fista_step.step(x_curr)
     assert torch.allclose(fista_step.residual, res1, atol=1e-5)
     
     # Iter 2

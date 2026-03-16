@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Literal, TypeAlias, ParamSpec, Concatenate
 from torch import Tensor, nn
+
+from typing import TYPE_CHECKING
+from typing import Literal, TypeAlias, ParamSpec, Concatenate
+from collections.abc import Callable
 
 if TYPE_CHECKING:
     from .variable import Variable
     from .parameter import ParameterBundle
+    from ..optim.step import OptimizerStep
+    from ..optim.optimizer import Optimizer
 
 
 # Types allowed for Variable construction
@@ -85,3 +89,10 @@ ParamProxMapType: TypeAlias = BVarXPrmXAnyToBVar
 PSmoothObjType: TypeAlias = BVarXAnyToTen
 PGradMapType: TypeAlias = BVarXAnyToBVar
 PLinOpType: TypeAlias = BVarXAnyToBVar
+
+
+# Decorator type for ensuring Variable input to the `Optimizer` and 
+# `OptimizerStep` methods
+Owner: TypeAlias = "OptimizerStep | Optimizer"
+WrapperIn: TypeAlias = "Callable[Concatenate[Owner, Variable, P], Variable]"
+WrapperOut: TypeAlias = Callable[Concatenate[Owner, VariableLike, P], VariableLike]

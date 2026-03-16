@@ -3,6 +3,7 @@ from enum import Enum
 import abc
 from typing import Any
 
+from .util import ensure_var_input
 from ..variable import Variable
 from .scheduler import MomentumScheduler
 from ..operators.linalg import adjoint
@@ -22,7 +23,7 @@ class OptimizerStep(abc.ABC):
     def __init__(self, tracking: bool = False):
         self._residual_tracking = tracking
         if self._residual_tracking:
-            self._residual = None
+            self._residual: Variable | None = None
         self._input_is_variable = True
     
     @abc.abstractmethod
@@ -34,6 +35,7 @@ class OptimizerStep(abc.ABC):
     def __call__(
         self, x_curr: VariableLike, *args: Any, **kwargs: Any
     ) -> VariableLike:
+        self._input_is_variable = isinstance(x_curr, Variable)
         return self.step(x_curr, *args, **kwargs)
     
     @property
@@ -73,7 +75,7 @@ class MomentumStep(OptimizerStep):
         self.strategy = strategy
         self.momentum_scheduler = momentum_scheduler
     
-    @Variable.ensure_var_input
+    @ensure_var_input
     def step(self, z_curr: Variable) -> Variable:
         if self.momentum_scheduler:
             self.momentum = self.momentum_scheduler()
@@ -101,7 +103,7 @@ class GDStep(OptimizerStep):
         self.stepsize_scheduler = stepsize_scheduler
         self.linesearch = linesearch
     
-    @Variable.ensure_var_input
+    @ensure_var_input
     def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
         direction = -self.grad_map(x_curr, *args, **kwargs)
         self._set_stepsize(x_curr, direction)
@@ -137,7 +139,7 @@ class ProxStep(OptimizerStep):
         super().__init__(tracking=False) # No tracking is needed.
         self.prox_map = Variable.wrap(prox_map)
     
-    @Variable.ensure_var_input
+    @ensure_var_input
     def step(self, x_curr: Variable) -> Variable:
         return self.prox_map(x_curr)
 
@@ -152,7 +154,7 @@ class AffineStep(OptimizerStep):
         self.lin_op = Variable.wrap(lin_op)
         self.vector = Variable(vector)
     
-    @Variable.ensure_var_input
+    @ensure_var_input
     def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
         x_new = self.lin_op(x_curr, *args, **kwargs) + self.vector
         if self._residual_tracking:
@@ -176,7 +178,7 @@ class PolyakStep(OptimizerStep):
         self.mm_step = MomentumStep(momentum, strategy=MomentumType.Polyak)
         self._x_prev = None
     
-    @Variable.ensure_var_input
+    @ensure_var_input
     def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
         x_new = self.gd_step(x_curr, *args, **kwargs)
         if self._x_prev is not None:
@@ -226,7 +228,7 @@ class NesterovStep(OptimizerStep):
         )
         self._x_prev = None
     
-    @Variable.ensure_var_input
+    @ensure_var_input
     def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
         if self._x_prev is None:
             self._x_prev = x_curr
@@ -274,7 +276,7 @@ class ProxGradStep(OptimizerStep):
         )
         self.prox_step = ProxStep(prox_map)
     
-    @Variable.ensure_var_input
+    @ensure_var_input
     def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
         x_new = self.prox_step(self.gd_step(x_curr, *args, **kwargs))
         if self._residual_tracking:
@@ -303,7 +305,7 @@ class FISTAStep(OptimizerStep):
         )
         self._x_prev = None
     
-    @Variable.ensure_var_input
+    @ensure_var_input
     def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
         if self._x_prev is None:
             self._x_prev = x_curr
@@ -357,7 +359,7 @@ class PDHGPartialStep(OptimizerStep):
     ) -> BaseVariableType:
         return self.step(inp_curr, oth_curr, *args, **kwargs)
     
-    @Variable.ensure_var_input
+    @ensure_var_input
     def step(
         self, inp_curr: Variable, oth_curr: Variable, *args: Any, **kwargs: Any
     ) -> Variable:
@@ -393,7 +395,7 @@ class PDHGStep(OptimizerStep):
             stepsize_dual, prox_map_dual, lin_op
         )
     
-    @Variable.ensure_var_input
+    @ensure_var_input
     def step(self, z_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
         x_prim = self.primal_step(z_curr.primal, z_curr.dual, *args, **kwargs)
         x_prim_mm = 2 * x_prim - z_curr.primal
