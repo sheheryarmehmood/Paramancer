@@ -15,6 +15,7 @@ from .util import (
     flatten, unflatten,
 )
 from .variable import Variable
+from .parameter import ParameterBundle
 
 __all__ = [
     "FlatVariable", "TupleVariable", "NestedVariable",
@@ -29,5 +30,5 @@ __all__ = [
     "PSmoothObjType", "PGradMapType", "PLinOpType",
     "is_tensor", "is_tuple_of_tensors", "is_nested_variable",
     "is_valid_variable", "flatten", "unflatten",
-    "Variable",
+    "Variable", "ParameterBundle"
 ]

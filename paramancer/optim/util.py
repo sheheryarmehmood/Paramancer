@@ -34,8 +34,10 @@ def ensure_var_input(fn: WrapperIn) -> WrapperOut:
         *args: P.args,
         **kwargs: P.kwargs
     ) -> VariableLike:
-        self._input_is_variable = isinstance(x_in, Variable)
-        x_var = x_in if self._input_is_variable else Variable(x_in)
+        _input_is_variable = isinstance(x_in, Variable)
+        if hasattr(self, "_input_is_variable"):
+            self._input_is_variable = _input_is_variable
+        x_var = x_in if _input_is_variable else Variable(x_in)
         x_out = fn(self, x_var, *args, **kwargs)
-        return x_out if self._input_is_variable else x_out.data
+        return x_out if _input_is_variable else x_out.data
     return wrapper

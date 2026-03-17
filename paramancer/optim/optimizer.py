@@ -45,7 +45,7 @@ class Optimizer:
     
     @ensure_var_input
     def run(
-        self, x_init: VariableLike, *args: Any,
+        self, x_init: Variable, *args: Any,
         iters: int | None = None, **kwargs: Any
     ) -> Variable:
         
