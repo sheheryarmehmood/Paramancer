@@ -1,5 +1,4 @@
 from __future__ import annotations
-import torch
 from typing import Any
 
 from ..optim.step import (
@@ -8,9 +7,9 @@ from ..optim.step import (
 )
 from ..optim.util import ensure_var_input
 from ..operators.grad import gradient
-from ..variable import Variable
+from ..variable import Variable, ParameterBundle
 from ..variable.types import (
-    ScalarLike, VariableLike, ParameterType,
+    IndexMapType, ScalarLike, VariableLike, ParameterLike,
     ParamSmoothObjType, ParamGradMapType, ParamProxMapType,
     MomentumSchedType, StepsizeSchedType
 )
@@ -33,14 +32,23 @@ where $a$ and $b$ are step size and momentum parameter respectively.
 
 
 class ParamMarkovStepMixin:
-    def __init__(self, u_in: ParameterType | None = None):
-        self._u_given = u_in
+    def __init__(
+        self,
+        u_in: ParameterLike | None = None,
+        indices: IndexMapType | None = None
+    ):
+        self._is_input_parambundle = isinstance(u_in, ParameterBundle)
+        if self._is_input_parambundle:
+            self._u_given = u_in
+        else:
+            # vvvv If `u_in` is `None`, initialize a dummy `ParameterBundle`.
+            self._u_given = ParameterBundle(u_in, indices=indices)
     
     @ensure_var_input
     def step(
         self,
         x_curr: Variable,
-        u_in: ParameterType | None = None,
+        u_in: ParameterLike | None = None,
         *args: Any, 
         **kwargs: Any
     ) -> Variable:
@@ -56,25 +64,32 @@ class ParamMarkovStepMixin:
     def __call__(
         self,
         x_curr: VariableLike,
-        u_given: ParameterType | None = None,
+        u_given: ParameterLike | None = None,
         *args: Any, 
         **kwargs: Any
     ) -> VariableLike:
         return self.step(x_curr, u_given, *args, **kwargs)
     
     @property
-    def u_given(self) -> ParameterType:
+    def u_given(self) -> ParameterLike:
         if self._u_given is None:
             raise RuntimeError(
-                "Parametric step called without setting u_given"
+                "Parameter accessed without setting u_given"
             )
-        return self._u_given
+        return (
+            self._u_given if self._is_input_parambundle
+            else self._u_given.data
+        )
     
     @u_given.setter
-    def u_given(self, u_in: ParameterType | None):
+    def u_given(self, u_in: ParameterLike | None):
         """Ignores the incoming `u_in` when it is `None`"""
-        if u_in is not None and u_in is not self._u_given:
-            self._u_given = u_in
+        if isinstance(u_in, ParameterBundle):
+            u_in = u_in.data
+        if u_in is None or u_in is self._u_given.data:
+            return      # Don't update if same or no parameter was given.
+        else:
+            self._u_given.data = u_in
 
 
 class ParamGradMixin:
@@ -97,7 +112,9 @@ class ParamGradMixin:
             self.grad_map_prm = grad_map_prm
     
     def _grad_map(self, x: VariableLike) -> VariableLike:
-        return self.grad_map_prm(x, self.u_given)
+        if not self._u_given.takes_params("grad"):
+            return self.grad_map_prm(x)
+        return self.grad_map_prm(x, self._u_given.grad)
 
 
 class ParamProxMixin:
@@ -105,7 +122,9 @@ class ParamProxMixin:
         self.prox_map_prm = prox_map_prm
     
     def _prox_map(self, x: VariableLike) -> VariableLike:
-        return self.prox_map_prm(x, self.u_given)
+        if not self._u_given.takes_params("prox"):
+            return self.prox_map_prm(x)
+        return self.prox_map_prm(x, self._u_given.prox)
 
 
 class GDParamMarkovStep(ParamGradMixin, ParamMarkovStepMixin, GDStep):
@@ -114,13 +133,14 @@ class GDParamMarkovStep(ParamGradMixin, ParamMarkovStepMixin, GDStep):
         stepsize: ScalarLike,
         smooth_obj_prm: ParamSmoothObjType | None = None,
         grad_map_prm: ParamGradMapType | None = None,
-        u_in: ParameterType | None = None,
+        u_in: ParameterLike | None = None,
+        indices: IndexMapType | None = None,
         stepsize_scheduler: StepsizeSchedType | None = None,
         linesearch: bool = True,
         tracking: bool = False
     ):
         ParamGradMixin.__init__(self, smooth_obj_prm, grad_map_prm)
-        ParamMarkovStepMixin.__init__(self, u_in)
+        ParamMarkovStepMixin.__init__(self, u_in, indices)
         GDStep.__init__(
             self, stepsize, grad_map=self._grad_map, linesearch=linesearch,
             stepsize_scheduler=stepsize_scheduler, tracking=tracking
@@ -134,11 +154,12 @@ class PolyakParamMarkovStep(ParamGradMixin, ParamMarkovStepMixin, PolyakStep):
         momentum: ScalarLike,
         smooth_obj_prm: ParamSmoothObjType | None = None,
         grad_map_prm: ParamGradMapType | None = None,
-        u_in: ParameterType | None = None,
+        u_in: ParameterLike | None = None,
+        indices: IndexMapType | None = None,
         tracking: bool = False
     ):
         ParamGradMixin.__init__(self, smooth_obj_prm, grad_map_prm)
-        ParamMarkovStepMixin.__init__(self, u_in)
+        ParamMarkovStepMixin.__init__(self, u_in, indices)
         PolyakStep.__init__(
             self, stepsize, momentum, grad_map=self._grad_map,
             tracking=tracking
@@ -153,12 +174,13 @@ class NesterovParamMarkovStep(
         stepsize: ScalarLike,
         smooth_obj_prm: ParamSmoothObjType | None = None,
         grad_map_prm: ParamGradMapType | None = None,
-        u_in: ParameterType | None = None,
+        u_in: ParameterLike | None = None,
+        indices: IndexMapType | None = None,
         momentum_scheduler: MomentumSchedType | None = None,
         tracking: bool = False
     ):
         ParamGradMixin.__init__(self, smooth_obj_prm, grad_map_prm)
-        ParamMarkovStepMixin.__init__(self, u_in)
+        ParamMarkovStepMixin.__init__(self, u_in, indices)
         NesterovStep.__init__(
             self, stepsize, grad_map=self._grad_map, tracking=tracking,
             momentum_scheduler=momentum_scheduler
@@ -174,12 +196,13 @@ class ProxGradParamMarkovStep(
         prox_map_prm: ParamProxMapType,
         smooth_obj_prm: ParamSmoothObjType | None = None,
         grad_map_prm: ParamGradMapType | None = None,
-        u_in: ParameterType | None = None,
+        u_in: ParameterLike | None = None,
+        indices: IndexMapType | None = None,
         tracking: bool = False
     ):
         ParamProxMixin.__init__(self, prox_map_prm)
         ParamGradMixin.__init__(self, smooth_obj_prm, grad_map_prm)
-        ParamMarkovStepMixin.__init__(self, u_in)
+        ParamMarkovStepMixin.__init__(self, u_in, indices)
         ProxGradStep.__init__(
             self, stepsize, self._prox_map, grad_map=self._grad_map,
             tracking=tracking
@@ -194,13 +217,14 @@ class FISTAParamMarkovStep(
         prox_map_prm: ParamProxMapType,
         smooth_obj_prm: ParamSmoothObjType | None = None,
         grad_map_prm: ParamGradMapType | None = None,
-        u_in: ParameterType | None = None,
+        u_in: ParameterLike | None = None,
+        indices: IndexMapType | None = None,
         momentum_scheduler: MomentumSchedType | None = None,
         tracking: bool = False
     ):
         ParamProxMixin.__init__(self, prox_map_prm)
         ParamGradMixin.__init__(self, smooth_obj_prm, grad_map_prm)
-        ParamMarkovStepMixin.__init__(self, u_in)
+        ParamMarkovStepMixin.__init__(self, u_in, indices)
         FISTAStep.__init__(
             self, stepsize, self._prox_map, grad_map=self._grad_map,
             tracking=tracking, momentum_scheduler=momentum_scheduler

@@ -7,6 +7,12 @@ from ._docstrings import prox_doc
 from ._util import dual
 
 
+# %% Differentiable Functions
+
+def l2_sq(p: torch.Tensor, scal: torch.Tensor) -> torch.Tensor:
+    return p / (1. + scal)
+
+
 # %% Simple Vector Norms
 
 def inf_ball(p: torch.Tensor, rad: torch.Tensor) -> torch.Tensor:
@@ -18,7 +24,7 @@ def l1_norm(p: torch.Tensor, scal: torch.Tensor) -> torch.Tensor:
 def l2_ball(
     p: torch.Tensor, rad: torch.Tensor, eps: float=1e-8
 ) -> torch.Tensor:
-    return p / torch.maximum(1., l2(p) / rad + eps)
+    return p / torch.maximum(torch.ones(1).squeeze(), l2(p) / rad + eps)
 def l2_norm(
     p: torch.Tensor, scal: torch.Tensor, eps: float=1e-8
 ) -> torch.Tensor:

@@ -83,11 +83,11 @@ def test_gradient_differentiability_without_params():
     
     b = b.detach().clone().requires_grad_()
     x = x.detach().clone()
-    grad_auto(x, a).backward()
     
     # vvvvv Graph is not created if `x` does not require grad.
-    assert b.grad is None
-
+    with pytest.raises(RuntimeError, match=".*does not have a grad_fn.*"):
+        grad_auto(x, a).backward()
+    
 
 def test_gradient_differentiability_with_params_args_kwargs():
     def smooth_bvar(

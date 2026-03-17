@@ -5,7 +5,7 @@ from typing import Any
 
 from ..variable import Variable, flatten, unflatten
 from ..variable.types import (
-    BaseVariableType, ParameterList, ParameterType,
+    BaseVariableType, ParameterList, is_parameter_type,
     PSmoothObjType, PGradMapType
 )
 
@@ -66,9 +66,10 @@ def gradient(smooth: PSmoothObjType) -> PGradMapType:
         # Optionally flatten params if they are a ParameterType
         # (for create_graph detection only)
         u_flat: tuple[torch.Tensor, ...] = ()
-        if len(args) > 0 and isinstance(args[0], ParameterType):
+        if len(args) > 0 and is_parameter_type(args[0]):
             u_flat = (
-                tuple(args[0]) if isinstance(args[0], ParameterList) 
+                tuple(args[0])
+                if isinstance(args[0], (ParameterList, tuple))
                 else (args[0],)
             )
         

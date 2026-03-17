@@ -4,7 +4,7 @@ import torch
 from ..variable import Variable
 from ..variable.types import (
     TupleVariable, BaseVariableType,
-    ParameterList, ParameterType,
+    ParameterList, is_parameter_type,
     PLinOpType
 )
 
@@ -76,9 +76,10 @@ def adjoint(
             raise TypeError("Expected `y` to be BaseVariableType when zero_el is not Variable.")
 
         u_flat: tuple[torch.Tensor, ...] = ()
-        if len(args) > 0 and isinstance(args[0], ParameterType):
+        if len(args) > 0 and is_parameter_type(args[0]):
             u_flat = (
-                tuple(args[0]) if isinstance(args[0], ParameterList) 
+                tuple(args[0])
+                if isinstance(args[0], (ParameterList, tuple))
                 else (args[0],)
             )
         y_data = y.data if isinstance(y, Variable) else y

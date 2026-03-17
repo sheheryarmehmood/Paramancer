@@ -1,10 +1,7 @@
 from __future__ import annotations
-import torch
-from functools import wraps
 
 from .types import (
-    VariableType, VariableLike, ScalarLike, ApplyType, SpecType,
-    IndexMapType, FlatParameter, TupleParameter, ParameterType, ParameterLike
+    IndexMapType, ParameterType
 )
 
 class ParameterBundle:
@@ -15,28 +12,34 @@ class ParameterBundle:
     ) -> None:
         self._data = data
         self._indices = indices or {}
-        self._indices.setdefault("grad", None)
-        self._indices.setdefault("lin_op", None)
+        if not self._indices:
+            self._indices.setdefault("grad", "all")
+            self._indices.setdefault("lin_op", "all")
 
     @property
     def data(self) -> ParameterType:
         return self._data
+    
+    @data.setter
+    def data(self, new_data: ParameterType):
+        self._data = new_data
+    
+    def takes_params(self, key: str) -> bool:
+        return key in self._indices and ( # No key -> no params.
+            bool(self._indices[key]) or # Empty index -> no params.
+            self._indices[key] == 0 # Index 0 is falsy but valid. 
+        )
 
     def select(
         self,
         key: str,
-    ) -> FlatParameter | TupleParameter:
-        if key not in self._indices:
+    ) -> ParameterType:
+        if not self.takes_params(key):
             return ()
 
         idx = self._indices[key]
-
-        if isinstance(self._data, FlatParameter):
-            if idx is None:
-                return self._data
-            raise ValueError(
-                f"Key '{key}' cannot index a single torch.nn.Parameter."
-            )
+        if idx == "all":        # Only way to access a `FlatParameter` `_data`.
+            return self._data
 
         if isinstance(idx, int):
             return self._data[idx]
@@ -44,21 +47,21 @@ class ParameterBundle:
         return tuple(self._data[i] for i in idx)
 
     @property
-    def grad(self) -> FlatParameter | TupleParameter:
+    def grad(self) -> ParameterType:
         return self.select("grad")
 
     @property
-    def prox(self) -> FlatParameter | TupleParameter:
+    def prox(self) -> ParameterType:
         return self.select("prox")
     
     @property
-    def lin_op(self) -> FlatParameter | TupleParameter:
+    def lin_op(self) -> ParameterType:
         return self.select("lin_op")
 
     @property
-    def primal(self) -> FlatParameter | TupleParameter:
+    def primal(self) -> ParameterType:
         return self.select("primal")
     
     @property
-    def dual(self) -> FlatParameter | TupleParameter:
+    def dual(self) -> ParameterType:
         return self.select("dual")

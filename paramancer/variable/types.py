@@ -58,9 +58,15 @@ SpecType: TypeAlias = FlatSpec | TupleSpec | NestedSpec
 FlatParameter = nn.Parameter
 TupleParameter = tuple[nn.Parameter, ...]
 ParameterList = nn.ParameterList
-ParameterType = FlatParameter | ParameterList
+ParameterType = FlatParameter | TupleParameter | ParameterList
 
-IndexType: TypeAlias = int | tuple[int, ...]
+def is_parameter_type(param: object) -> bool:
+    return isinstance(param, (FlatParameter, ParameterList)) or (
+        isinstance(param, tuple)
+        and all(isinstance(item, FlatParameter) for item in param)
+    )
+
+IndexType: TypeAlias = Literal["all"] | int | tuple[int, ...]
 IndexMapType: TypeAlias = dict[str, IndexType]
 
 ParameterLike: TypeAlias = "ParameterType | ParameterBundle"
