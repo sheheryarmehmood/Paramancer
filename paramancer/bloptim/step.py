@@ -1,4 +1,5 @@
 from __future__ import annotations
+import torch
 from typing import Any
 
 from ..optim.step import (
@@ -8,8 +9,10 @@ from ..optim.step import (
 from ..optim.util import ensure_var_input
 from ..operators.grad import gradient
 from ..variable import Variable, ParameterBundle
+from ..variable.util import flatten, unflatten
 from ..variable.types import (
-    IndexMapType, ScalarLike, VariableLike, ParameterLike,
+    IndexMapType, ScalarLike, VariableLike, ParameterLike, FlatParameter,
+    ApplyType, SpecType,
     ParamSmoothObjType, ParamGradMapType, ParamProxMapType,
     MomentumSchedType, StepsizeSchedType
 )
@@ -90,6 +93,61 @@ class ParamMarkovStepMixin:
             return      # Don't update if same or no parameter was given.
         else:
             self._u_given.data = u_in
+
+
+class VJPStepMixin:
+    def vjp(
+        self,
+        x_in: VariableLike,
+        u_in: ParameterLike,
+        grad_out: VariableLike,
+    ) -> tuple[VariableLike, ParameterLike]:
+        ...
+
+    def vjp_var(
+        self,
+        x_in: VariableLike,
+        u_in: ParameterLike,
+        grad_out: VariableLike,
+    ) -> VariableLike:
+        grad_out_flat, spec = flatten(grad_out)
+        def step_var(
+            *x_flat: torch.Tensor
+        ) -> ApplyType:
+            x = unflatten(x_flat, spec)
+            out = self.step(x, u_in)
+            out_flat, = flatten(out)
+            return out_flat
+        is_flat = isinstance(u_in, FlatParameter)
+        if is_flat:
+            u_in = (u_in,)
+        (_, vjpfunc) = torch.func.vjp(step_var, *u_in)
+        grad_u = vjpfunc(grad_out_flat)
+        return grad_u[0] if is_flat else grad_u
+
+    def vjp_prm(
+        self,
+        x_in: VariableLike,
+        u_in: ParameterLike,
+        grad_out: VariableLike,
+    ) -> ParameterLike:
+        if isinstance(u_in, ParameterBundle):
+            u_in = u_in.data
+        grad_out_flat, = flatten(grad_out)
+        def step_prm(
+            *u: torch.nn.Parameter
+        ) -> ApplyType:
+            out = self.step(x_in, u)
+            out_flat, = flatten(out)
+            return out_flat
+        is_flat = isinstance(u_in, torch.nn.Parameter)
+        if is_flat:
+            u_in = (u_in,)
+        (_, vjpfunc) = torch.func.vjp(step_prm, *u_in)
+        grad_u = vjpfunc(grad_out_flat)
+        return grad_u[0] if is_flat else grad_u
+        
+        
 
 
 class ParamGradMixin:
