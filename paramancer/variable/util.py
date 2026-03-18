@@ -2,7 +2,9 @@ from __future__ import annotations
 from typing import Any
 import torch
 
-from .types import VariableType, ApplyType, SpecType
+from .types import (
+    VariableType, ParameterType, FlattendType, VSpecType, PSpecType
+)
 
 
 def is_tensor(x: Any) -> bool:
@@ -20,17 +22,31 @@ def is_nested_variable(x: Any) -> bool:
         and is_tuple_of_tensors(x[1])
     )
 
+def is_parameter(x: Any) -> bool:
+    return isinstance(x, torch.nn.Parameter)
+
+def is_collection_of_parameters(x: Any) -> bool:
+    return (
+        isinstance(x, torch.nn.ParameterList) or
+        isinstance(x, tuple) and all(is_parameter(p) for p in x)
+    )
+
 def is_valid_variable(x: Any) -> bool:
     return is_tensor(x) or is_tuple_of_tensors(x) or is_nested_variable(x)
 
-def flatten(data: VariableType) -> tuple[ApplyType, SpecType]:
+def is_valid_parameter(x: Any) -> bool:
+    return is_parameter(x) or is_collection_of_parameters(x)
+
+
+def vlatten(data: VariableType) -> tuple[FlattendType, VSpecType]:
     """
-    Flattens VariableType into a flat tuple of tensors plus a spec to reconstruct it.
+    Flattens `VariableType` into a flat tuple of tensors plus a spec to 
+    reconstruct it.
 
     Spec encodings:
-    - ("flat",)
-    - ("tuple", n)
-    - ("nested", n_left, n_right)
+    - `("flat",)`
+    - `("tuple", n)`
+    - `("nested", n_left, n_right)`
     """
     if is_tensor(data):
         return (data,), ("flat",)
@@ -42,10 +58,16 @@ def flatten(data: VariableType) -> tuple[ApplyType, SpecType]:
         left, right = data
         flat = (*left, *right)
         return flat, ("nested", len(left), len(right))
+    
+    raise TypeError(
+        "Unsupported `VariableType`. Expected `Tensor`, or `tuple[Tensor,...]`"
+        " or `tuple[tuple[Tensor,...], tuple[Tensor,...]]`."
+    )
 
-def unflatten(flat: ApplyType, spec: SpecType) -> VariableType:
+def unvlatten(flat: FlattendType, spec: VSpecType) -> VariableType:
     """
-    Reconstructs VariableType from a flat tuple of tensors and a spec produced by `flatten`.
+    Reconstructs `VariableType` from a flat tuple of tensors and a spec 
+    produced by `vlatten`.
     """
     if not is_tuple_of_tensors(flat):
         raise TypeError("`flat` must be a tuple of torch.Tensor.")
@@ -87,3 +109,44 @@ def unflatten(flat: ApplyType, spec: SpecType) -> VariableType:
         left = tuple(flat[:nL])
         right = tuple(flat[nL:nL + nR])
         return (left, right)
+
+
+def platten(par: ParameterType) -> tuple[FlattendType, PSpecType]:
+    if is_parameter(par):
+        return (par,), ("flat",)
+    if is_collection_of_parameters(par):
+        # vvvv set spec to 'tuple' for both tuple and ParameterList.
+        return par, ("tuple", len(par))
+    raise TypeError(
+        "Unsupported ParameterType. Expected nn.Parameter, or "
+        "tuple[nn.Parameter,...] or nn.ParameterList."
+    )
+
+def unplatten(flat: FlattendType, spec: PSpecType) -> ParameterType:
+    """
+    Reconstructs ParameterType from a flat tuple of Parameters and a spec 
+    produced by `platten`.
+    """
+    if not is_collection_of_parameters(flat):
+        raise TypeError("`flat` must be a tuple of torch.nn.Parameter.")
+    
+    if not isinstance(spec, tuple) or len(spec) < 1:
+        raise TypeError("`spec` must be a non-empty tuple.")
+    
+    tag = spec[0]
+    if tag == "flat":
+        if len(flat) != 1:
+            raise ValueError(
+                f"Spec {spec} expects exactly 1 tensor, got {len(flat)}."
+            )
+        return flat[0]
+    
+    if tag == "tuple":
+        if not isinstance(spec[1], int):
+            raise TypeError("Spec ('tuple', n) must have an int n.")
+        n = spec[1]
+        if len(flat) != n:
+            raise ValueError(
+                f"Spec {spec} expects {n} tensors, got {len(flat)}."
+            )
+        return tuple(flat)

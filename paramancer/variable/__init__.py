@@ -5,14 +5,14 @@ from .types import (
     BVarToBVar, VoidToScal, VarToScal, BVarXBVarToScal,
     GradMapType, ProxMapType, LinOpType, MetricFnType,
     MomentumSchedType, LineSearchSchedType, MetricSpec,
-    StepsizeSchedType, ApplyType, FlatSpec, TupleSpec,
-    NestedSpec, SpecType, FlatParameter, ParameterList,
+    StepsizeSchedType, FlattendType, FlatSpec, TupleSpec,
+    NestedSpec, VSpecType, FlatParameter, ParameterList,
     ParameterType, ParamSmoothObjType, ParamGradMapType,
     ParamProxMapType, PSmoothObjType, PGradMapType, PLinOpType,
 )
 from .util import (
     is_tensor, is_tuple_of_tensors, is_nested_variable, is_valid_variable,
-    flatten, unflatten,
+    vlatten, unvlatten,
 )
 from .variable import Variable
 from .parameter import ParameterBundle
@@ -24,11 +24,11 @@ __all__ = [
     "BVarToBVar", "VoidToScal", "VarToScal", "BVarXBVarToScal",
     "GradMapType", "ProxMapType", "LinOpType", "MetricFnType",
     "MomentumSchedType", "LineSearchSchedType", "MetricSpec",
-    "StepsizeSchedType", "ApplyType", "FlatSpec", "TupleSpec",
-    "NestedSpec", "SpecType", "FlatParameter", "ParameterList",
+    "StepsizeSchedType", "FlattendType", "FlatSpec", "TupleSpec",
+    "NestedSpec", "VSpecType", "FlatParameter", "ParameterList",
     "ParameterType", "ParamSmoothObjType", "ParamGradMapType", "ParamProxMapType",
     "PSmoothObjType", "PGradMapType", "PLinOpType",
     "is_tensor", "is_tuple_of_tensors", "is_nested_variable",
-    "is_valid_variable", "flatten", "unflatten",
+    "is_valid_variable", "vlatten", "unvlatten",
     "Variable", "ParameterBundle"
 ]

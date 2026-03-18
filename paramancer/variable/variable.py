@@ -4,11 +4,10 @@ import torch
 
 from .types import (
     VariableType, VariableLike, BaseVariableLike,
-    ScalarLike, ApplyType, SpecType, P,
-    WrapperIn, WrapperOut, Owner
+    ScalarLike, FlattendType, VSpecType
 )
 from .util import (
-    flatten, unflatten, is_tensor, is_valid_variable
+    vlatten, unvlatten, is_tensor, is_valid_variable
 )
 
 
@@ -31,14 +30,12 @@ class Variable:
             )
         self._data = data
     
-    def flatten(self):
-        return flatten(self.data)
+    def flatten(self) -> tuple[FlattendType, VSpecType]:
+        return vlatten(self.data)
     
     @staticmethod
-    def unflatten(flat: ApplyType, spec: SpecType) -> VariableType:
-        return unflatten(flat, spec)
-    
-    
+    def unflatten(flat: FlattendType, spec: VSpecType) -> VariableType:
+        return unvlatten(flat, spec)
     
     # ------------------------
     # Utility: recursive apply

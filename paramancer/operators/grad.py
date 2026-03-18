@@ -3,7 +3,7 @@ import torch
 from collections.abc import Callable
 from typing import Any
 
-from ..variable import Variable, flatten, unflatten
+from ..variable import Variable, vlatten, unvlatten
 from ..variable.types import (
     BaseVariableType, ParameterList, is_parameter_type,
     PSmoothObjType, PGradMapType
@@ -61,7 +61,7 @@ def gradient(smooth: PSmoothObjType) -> PGradMapType:
         x_data = x.data if x_was_var else x
 
         # Flatten x into a tuple of tensors we can hand to autograd.grad
-        x_flat, x_spec = flatten(x_data)
+        x_flat, x_spec = vlatten(x_data)
 
         # Optionally flatten params if they are a ParameterType
         # (for create_graph detection only)
@@ -83,7 +83,7 @@ def gradient(smooth: PSmoothObjType) -> PGradMapType:
 
         # Compute objective value and grads w.r.t. x_flat
         with torch.enable_grad():
-            x_unflat = unflatten(x_flat, x_spec)
+            x_unflat = unvlatten(x_flat, x_spec)
             x_in = Variable(x_unflat) if x_was_var else x_unflat
             out = smooth(x_in, *args, **kwargs).sum()
 
@@ -99,7 +99,7 @@ def gradient(smooth: PSmoothObjType) -> PGradMapType:
         _set_req_grad(x_flat, rgs)
 
         # Unflatten gradient back to the same structure as x
-        out_grad = unflatten(gd, x_spec)
+        out_grad = unvlatten(gd, x_spec)
         return Variable(out_grad) if x_was_var else out_grad
 
     return grad_s

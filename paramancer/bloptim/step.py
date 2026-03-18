@@ -9,10 +9,9 @@ from ..optim.step import (
 from ..optim.util import ensure_var_input
 from ..operators.grad import gradient
 from ..variable import Variable, ParameterBundle
-from ..variable.util import flatten, unflatten
 from ..variable.types import (
-    IndexMapType, ScalarLike, VariableLike, ParameterLike, FlatParameter,
-    ApplyType, SpecType,
+    IndexMapType, ScalarLike, VariableLike, ParameterLike,
+    FlattendType,
     ParamSmoothObjType, ParamGradMapType, ParamProxMapType,
     MomentumSchedType, StepsizeSchedType
 )
@@ -110,20 +109,18 @@ class VJPStepMixin:
         u_in: ParameterLike,
         grad_out: VariableLike,
     ) -> VariableLike:
-        grad_out_flat, spec = flatten(grad_out)
+        x_in_flat, x_spec = x_in.flatten()
+        grad_out_flat, = grad_out.flatten()
         def step_var(
             *x_flat: torch.Tensor
-        ) -> ApplyType:
-            x = unflatten(x_flat, spec)
+        ) -> FlattendType:
+            x = Variable.unflatten(x_flat, x_spec)
             out = self.step(x, u_in)
-            out_flat, = flatten(out)
+            out_flat, = out.flatten()
             return out_flat
-        is_flat = isinstance(u_in, FlatParameter)
-        if is_flat:
-            u_in = (u_in,)
-        (_, vjpfunc) = torch.func.vjp(step_var, *u_in)
-        grad_u = vjpfunc(grad_out_flat)
-        return grad_u[0] if is_flat else grad_u
+        (_, vjp_var) = torch.func.vjp(step_var, *x_in_flat)
+        grad_x_flat = vjp_var(grad_out_flat)
+        return Variable.unflatten(grad_x_flat, x_spec)
 
     def vjp_prm(
         self,
@@ -133,18 +130,17 @@ class VJPStepMixin:
     ) -> ParameterLike:
         if isinstance(u_in, ParameterBundle):
             u_in = u_in.data
-        grad_out_flat, = flatten(grad_out)
+        grad_out_flat, = grad_out.flatten()
         def step_prm(
             *u: torch.nn.Parameter
-        ) -> ApplyType:
+        ) -> FlattendType:
             out = self.step(x_in, u)
-            out_flat, = flatten(out)
+            out_flat, = out.flatten()
             return out_flat
-        is_flat = isinstance(u_in, torch.nn.Parameter)
-        if is_flat:
+        if is_flat := isinstance(u_in, torch.nn.Parameter):
             u_in = (u_in,)
-        (_, vjpfunc) = torch.func.vjp(step_prm, *u_in)
-        grad_u = vjpfunc(grad_out_flat)
+        (_, vjp_prm) = torch.func.vjp(step_prm, *u_in)
+        grad_u = vjp_prm(grad_out_flat)
         return grad_u[0] if is_flat else grad_u
         
         

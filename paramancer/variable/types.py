@@ -47,11 +47,12 @@ StepsizeSchedType: TypeAlias = MomentumSchedType | LineSearchSchedType
 
 
 # for flattened variable to be passed to `OptimizerID.apply`
-ApplyType: TypeAlias = tuple[Tensor, ...]
+FlattendType: TypeAlias = tuple[Tensor, ...]
 FlatSpec: TypeAlias = tuple[Literal["flat"]]
 TupleSpec: TypeAlias = tuple[Literal["tuple"], int]
 NestedSpec: TypeAlias = tuple[Literal["nested"], int, int]
-SpecType: TypeAlias = FlatSpec | TupleSpec | NestedSpec
+VSpecType: TypeAlias = FlatSpec | TupleSpec | NestedSpec
+PSpecType: TypeAlias = FlatSpec | TupleSpec
 
 
 # Types allowed for Parameter
