@@ -34,8 +34,8 @@ class Variable:
         return vlatten(self.data)
     
     @staticmethod
-    def unflatten(flat: FlattendType, spec: VSpecType) -> VariableType:
-        return unvlatten(flat, spec)
+    def unflatten(flat: FlattendType, spec: VSpecType) -> Variable:
+        return Variable(unvlatten(flat, spec))
     
     # ------------------------
     # Utility: recursive apply

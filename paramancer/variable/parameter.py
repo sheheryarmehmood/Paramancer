@@ -19,6 +19,10 @@ class ParameterBundle:
     @property
     def data(self) -> ParameterType:
         return self._data
+
+    @property
+    def indices(self) -> IndexMapType:
+        return self._indices
     
     @data.setter
     def data(self, new_data: ParameterType):

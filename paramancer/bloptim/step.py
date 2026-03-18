@@ -9,9 +9,10 @@ from ..optim.step import (
 from ..optim.util import ensure_var_input
 from ..operators.grad import gradient
 from ..variable import Variable, ParameterBundle
+from ..variable.util import vlatten, unvlatten, platten, unplatten
 from ..variable.types import (
-    IndexMapType, ScalarLike, VariableLike, ParameterLike,
-    FlattendType,
+    IndexMapType, ScalarLike, VariableLike, ParameterLike, ParameterType,
+    FlattendType, P,
     ParamSmoothObjType, ParamGradMapType, ParamProxMapType,
     MomentumSchedType, StepsizeSchedType
 )
@@ -51,8 +52,8 @@ class ParamMarkovStepMixin:
         self,
         x_curr: Variable,
         u_in: ParameterLike | None = None,
-        *args: Any, 
-        **kwargs: Any
+        *args: P.args,
+        **kwargs: P.kwargs
     ) -> Variable:
         if not self.is_markovian():
             self.x_prev = x_curr.previous
@@ -67,8 +68,8 @@ class ParamMarkovStepMixin:
         self,
         x_curr: VariableLike,
         u_given: ParameterLike | None = None,
-        *args: Any, 
-        **kwargs: Any
+        *args: P.args, 
+        **kwargs: P.kwargs
     ) -> VariableLike:
         return self.step(x_curr, u_given, *args, **kwargs)
     
@@ -100,48 +101,59 @@ class VJPStepMixin:
         x_in: VariableLike,
         u_in: ParameterLike,
         grad_out: VariableLike,
+        *args: P.args,
+        **kwargs: P.kwargs
     ) -> tuple[VariableLike, ParameterLike]:
-        ...
+        return (
+            self.vjp_var(x_in, u_in, grad_out, *args, **kwargs),
+            self.vjp_prm(x_in, u_in, grad_out, *args, **kwargs)
+        )
 
     def vjp_var(
         self,
         x_in: VariableLike,
         u_in: ParameterLike,
         grad_out: VariableLike,
+        *args: P.args,
+        **kwargs: P.kwargs
     ) -> VariableLike:
-        x_in_flat, x_spec = x_in.flatten()
-        grad_out_flat, = grad_out.flatten()
+        x_is_var = isinstance(x_in, Variable)
+        x_in_flat, x_spec = vlatten(x_in if x_is_var else x_in.data)
         def step_var(
             *x_flat: torch.Tensor
         ) -> FlattendType:
-            x = Variable.unflatten(x_flat, x_spec)
-            out = self.step(x, u_in)
+            x = unvlatten(x_flat, x_spec)
+            out = self.step(x, u_in, *args, **kwargs)
             out_flat, = out.flatten()
             return out_flat
+        grad_out_flat, = vlatten(grad_out if x_is_var else grad_out.data)
         (_, vjp_var) = torch.func.vjp(step_var, *x_in_flat)
         grad_x_flat = vjp_var(grad_out_flat)
-        return Variable.unflatten(grad_x_flat, x_spec)
+        return unvlatten(grad_x_flat, x_spec)
 
     def vjp_prm(
         self,
         x_in: VariableLike,
         u_in: ParameterLike,
         grad_out: VariableLike,
-    ) -> ParameterLike:
-        if isinstance(u_in, ParameterBundle):
-            u_in = u_in.data
-        grad_out_flat, = grad_out.flatten()
+        *args: P.args,
+        **kwargs: P.kwargs
+    ) -> ParameterType:     # No need to convert `grad_u` to `ParameterBundle`.
+        # `x_in`, `grad_out`, and `step` output should all be of same `type`.
+        x_is_var = isinstance(x_in, Variable)
         def step_prm(
             *u: torch.nn.Parameter
         ) -> FlattendType:
-            out = self.step(x_in, u)
-            out_flat, = out.flatten()
+            out = self.step(x_in, u, *args, **kwargs)
+            out_flat, = vlatten(out.data if x_is_var else out)
             return out_flat
-        if is_flat := isinstance(u_in, torch.nn.Parameter):
-            u_in = (u_in,)
-        (_, vjp_prm) = torch.func.vjp(step_prm, *u_in)
-        grad_u = vjp_prm(grad_out_flat)
-        return grad_u[0] if is_flat else grad_u
+        grad_out_flat, = vlatten(grad_out.data if x_is_var else grad_out)
+        u_flat, u_spec = platten(
+            u_in.data if isinstance(u_in, ParameterBundle) else u_in
+        )
+        (_, vjp_prm) = torch.func.vjp(step_prm, *u_flat)
+        grad_u_flat = vjp_prm(grad_out_flat)
+        return unplatten(grad_u_flat, u_spec)
         
         
 
