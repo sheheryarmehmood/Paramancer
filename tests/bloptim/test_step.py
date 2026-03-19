@@ -1,9 +1,13 @@
 import torch
+import torch.linalg as la
 import pytest
 from typing import TypeAlias
 
-from paramancer.bloptim.step import FISTAParamMarkovStep, GDMarkovParamStep
+from paramancer.bloptim.step import (
+    FISTAParamMarkovStep, GDParamMarkovStep, PolyakParamMarkovStep
+)
 from paramancer.optim.step import FISTAStep
+from paramancer.optim.optimizer import NeumannSeries
 
 
 def test_fista_param_markov_step():
@@ -139,7 +143,7 @@ def test_gradient_descent_vjp():
     grad_x, (grad_A, grad_b) = vjp_grad_des(xk, u, grad_xkp, ss)
     
     u_pm = (A, b)
-    pm_step = GDMarkovParamStep(
+    pm_step = GDParamMarkovStep(
         ss, grad_map_prm=grad_lr, u_in=(A, b)
     )
     xkp_pm = pm_step(xk, u_pm)
@@ -150,7 +154,39 @@ def test_gradient_descent_vjp():
     assert torch.allclose(grad_b, grad_b_pm)
 
 
-def test_gradient_descent_jvp():
-    pass
-        
+def test_implicit_differentiation_with_polyak_step():
+    def grad_map(x, u):
+        A, b, r = u
+        return A.T @ (A @ x - b) + r * x
+    
+    def minimizer(A, b, r):
+        return la.solve(A.T @ A + r * torch.eye(A.shape[1]), A.T @ b)
+    
+    M, N = 10, 5
+    A, b = torch.rand(M, N), torch.randn(M)
+    r = torch.rand([])
+    A_tan, b_tan = torch.randn_like(A), torch.randn_like(b)
+    r_tan = torch.randn_like(r)
+    grad_xm = torch.randn(N)
+    u = (A, b, r)
+    u_tan = (A_tan, b_tan, r_tan)
+    xm = minimizer(A, b, r)
+    
+    _, vjp_anl = torch.func.vjp(minimizer, *u)
+    grad_u_anl = vjp_anl(grad_xm)
+    _, xm_tan_anl = torch.func.jvp(minimizer, u, u_tan)
+    
+    lip, mu = la.norm(A.T @ A, ord=2), la.norm(A.T @ A, ord=-2)
+    rt_lip, rt_mu = lip.sqrt(), mu.sqrt()
+    ss = 4 / (rt_lip + rt_mu)**2
+    mm = (rt_lip - rt_mu)**2 / (rt_lip + rt_mu)**2
+    pm_step = PolyakParamMarkovStep(ss, mm, grad_map_prm=grad_map, u_in=u)
+    neumann_jvp = NeumannSeries(
+        lambda v: pm_step.jvp_var((xm, xm), u, v),
+        pm_step.jvp_par((xm, xm), u, u_tan),
+        tol=1e-8, iters=10000
+    )
+    xm_tan_neu = neumann_jvp()
+    
+    assert torch.allclose(xm_tan_anl, xm_tan_neu)
     

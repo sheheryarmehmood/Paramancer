@@ -1,5 +1,7 @@
 from __future__ import annotations
+import torch
 
+from .util import platten, unplatten
 from .types import (
     IndexMapType, ParameterType
 )
@@ -15,6 +17,12 @@ class ParameterBundle:
         if not self._indices:
             self._indices.setdefault("grad", "all")
             self._indices.setdefault("lin_op", "all")
+    
+    def zeros_like(self):
+        flat, spec = platten(self.data)
+        zero_flat = tuple(torch.zeros_like(u) for u in flat)
+        zero = unplatten(zero_flat, spec)
+        return ParameterBundle(zero, self.indices)
 
     @property
     def data(self) -> ParameterType:

@@ -1,19 +1,14 @@
 from __future__ import annotations
-import torch
-from typing import Any
 
+from ._mixins import (
+    ParamMarkovStepMixin, JVPMixin, VJPMixin, ParamGradMixin, ParamProxMixin
+)
 from ..optim.step import (
     GDStep, PolyakStep, NesterovStep,
     ProxGradStep, FISTAStep
 )
-from ..optim.util import ensure_var_input
-from ..operators.grad import gradient
-from ..variable import Variable, ParameterBundle
-from ..variable.util import vlatten, unvlatten, platten, unplatten
 from ..variable.types import (
-    IndexMapType, ScalarLike, VariableLike,
-    ParameterLike, ParameterType, FlatParameter,
-    FlattendType, P,
+    IndexMapType, ScalarLike, ParameterLike,
     ParamSmoothObjType, ParamGradMapType, ParamProxMapType,
     MomentumSchedType, StepsizeSchedType
 )
@@ -35,182 +30,8 @@ where $a$ and $b$ are step size and momentum parameter respectively.
 """
 
 
-class ParamMarkovStepMixin:
-    def __init__(
-        self,
-        u_in: ParameterLike | None = None,
-        indices: IndexMapType | None = None
-    ):
-        self._is_input_parambundle = isinstance(u_in, ParameterBundle)
-        if self._is_input_parambundle:
-            self._u_given = u_in
-        else:
-            # vvvv If `u_in` is `None`, initialize a dummy `ParameterBundle`.
-            self._u_given = ParameterBundle(u_in, indices=indices)
-    
-    @ensure_var_input
-    def step(
-        self,
-        x_curr: Variable,
-        u_in: ParameterLike | None = None,
-        *args: P.args,
-        **kwargs: P.kwargs
-    ) -> Variable:
-        if not self.is_markovian():
-            self.x_prev = x_curr.previous
-            x_curr = x_curr.current
-        self.u_given = u_in
-        x_new = super().step(x_curr, *args, **kwargs)
-        if not self.is_markovian():
-            x_new = Variable.from_momentum(x_new, x_curr)
-        return x_new
-    
-    def __call__(
-        self,
-        x_curr: VariableLike,
-        u_given: ParameterLike | None = None,
-        *args: P.args, 
-        **kwargs: P.kwargs
-    ) -> VariableLike:
-        return self.step(x_curr, u_given, *args, **kwargs)
-    
-    @property
-    def u_given(self) -> ParameterLike:
-        if self._u_given is None:
-            raise RuntimeError(
-                "Parameter accessed without setting u_given"
-            )
-        return (
-            self._u_given if self._is_input_parambundle
-            else self._u_given.data
-        )
-    
-    @u_given.setter
-    def u_given(self, u_in: ParameterLike | None):
-        """Ignores the incoming `u_in` when it is `None`"""
-        if isinstance(u_in, ParameterBundle):
-            u_in = u_in.data
-        if u_in is None or u_in is self._u_given.data:
-            return      # Don't update if same or no parameter was given.
-        else:
-            self._u_given.data = u_in
-
-
-class VJPParamStepMixin:
-    def vjp(
-        self,
-        x_in: VariableLike,
-        u_in: ParameterLike,
-        grad_out: VariableLike,
-        *args: P.args,
-        **kwargs: P.kwargs
-    ) -> tuple[VariableLike, ParameterLike]:
-        x_is_var = isinstance(x_in, Variable)
-        def step(*args: torch.Tensor) -> FlattendType:
-            x = unvlatten(args[:len(x_flat)], x_spec)
-            u = unplatten(args[len(x_flat):], u_spec)
-            out = self.step(x, u, *args, **kwargs)
-            return vlatten(out.data if x_is_var else out)[0]
-        x_flat, x_spec = vlatten(x_in.data if x_is_var else x_in)
-        u_flat, u_spec = platten(
-            u_in.data if isinstance(u_in, ParameterBundle) else u_in
-        )
-        grad_out_flat = vlatten(grad_out if x_is_var else grad_out.data)[0]
-        (_, vjp) = torch.func.vjp(step, *x_flat, *u_flat)
-        grad_in_flat = vjp(grad_out_flat)
-        grad_x = unvlatten(grad_in_flat[:len(x_flat)], x_spec)
-        grad_u = unvlatten(grad_in_flat[len(x_flat)], u_spec)
-        return grad_x, grad_u
-        # return (
-        #     self.vjp_var(x_in, u_in, grad_out, *args, **kwargs),
-        #     self.vjp_prm(x_in, u_in, grad_out, *args, **kwargs)
-        # )
-
-    def vjp_var(
-        self,
-        x_in: VariableLike,
-        u_in: ParameterLike,
-        grad_out: VariableLike,
-        *args: P.args,
-        **kwargs: P.kwargs
-    ) -> VariableLike:
-        def step_var(*x_flat: torch.Tensor) -> FlattendType:
-            x = unvlatten(x_flat, x_spec)
-            out = self.step(x, u_in, *args, **kwargs)
-            out_flat = vlatten(out.data if x_is_var else out)[0]
-            return out_flat
-        x_is_var = isinstance(x_in, Variable)
-        x_flat, x_spec = vlatten(x_in.data if x_is_var else x_in)
-        grad_out_flat = vlatten(grad_out if x_is_var else grad_out.data)[0]
-        (_, vjp_var) = torch.func.vjp(step_var, *x_flat)
-        grad_x_flat = vjp_var(grad_out_flat)
-        return unvlatten(grad_x_flat, x_spec)
-
-    def vjp_prm(
-        self,
-        x_in: VariableLike,
-        u_in: ParameterLike,
-        grad_out: VariableLike,
-        *args: P.args,
-        **kwargs: P.kwargs
-    ) -> ParameterType:     # No need to convert `grad_u` to `ParameterBundle`.
-        def step_prm(*u: FlatParameter) -> FlattendType:
-            out = self.step(x_in, u, *args, **kwargs)
-            out_flat = vlatten(out.data if x_is_var else out)[0]
-            return out_flat
-        # `x_in`, `grad_out`, and `step` output should all be of same `type`.
-        x_is_var = isinstance(x_in, Variable)
-        grad_out_flat = vlatten(grad_out.data if x_is_var else grad_out)[0]
-        u_flat, u_spec = platten(
-            u_in.data if isinstance(u_in, ParameterBundle) else u_in
-        )
-        (_, vjp_prm) = torch.func.vjp(step_prm, *u_flat)
-        grad_u_flat = vjp_prm(grad_out_flat)
-        return unplatten(grad_u_flat, u_spec)
-
-
-class ParamGradMixin:
-    def __init__(
-        self,
-        smooth_obj_prm: ParamSmoothObjType | None = None,
-        grad_map_prm: ParamGradMapType | None = None
-    ):
-        self._init_grad_map_prm(smooth_obj_prm, grad_map_prm)
-    
-    def _init_grad_map_prm(self, smooth_map_prm, grad_map_prm):
-        if (smooth_map_prm is None) == (grad_map_prm is None):
-            raise ValueError(
-                "Either `grad_map_prm` should be supplied or `smooth_map_prm`,"
-                " but not both. One of them must be set to `None`."
-            )
-        if grad_map_prm is None:
-            self.grad_map_prm = gradient(smooth_map_prm)
-        else:
-            self.grad_map_prm = grad_map_prm
-    
-    def _grad_map(
-        self,
-        x: VariableLike,
-        *args: P.args,
-        **kwargs: P.kwargs
-    ) -> VariableLike:
-        if not self._u_given.takes_params("grad"):
-            return self.grad_map_prm(x, *args, **kwargs)
-        return self.grad_map_prm(x, self._u_given.grad, *args, **kwargs)
-
-
-class ParamProxMixin:
-    def __init__(self, prox_map_prm: ParamProxMapType):
-        self.prox_map_prm = prox_map_prm
-    
-    def _prox_map(self, x: VariableLike) -> VariableLike:
-        if not self._u_given.takes_params("prox"):
-            return self.prox_map_prm(x)
-        return self.prox_map_prm(x, self._u_given.prox)
-
-
 class GDParamMarkovStep(
-    ParamGradMixin, VJPParamStepMixin, ParamMarkovStepMixin, GDStep
+    ParamGradMixin, JVPMixin, VJPMixin, ParamMarkovStepMixin, GDStep
 ):
     def __init__(
         self,
@@ -231,7 +52,9 @@ class GDParamMarkovStep(
         )
 
 
-class PolyakParamMarkovStep(ParamGradMixin, ParamMarkovStepMixin, PolyakStep):
+class PolyakParamMarkovStep(
+    ParamGradMixin, JVPMixin, VJPMixin, ParamMarkovStepMixin, PolyakStep
+):
     def __init__(
         self,
         stepsize: ScalarLike,
@@ -251,7 +74,7 @@ class PolyakParamMarkovStep(ParamGradMixin, ParamMarkovStepMixin, PolyakStep):
 
 
 class NesterovParamMarkovStep(
-    ParamGradMixin, ParamMarkovStepMixin, NesterovStep
+    ParamGradMixin, JVPMixin, VJPMixin, ParamMarkovStepMixin, NesterovStep
 ):
     def __init__(
         self,
@@ -272,7 +95,8 @@ class NesterovParamMarkovStep(
 
 
 class ProxGradParamMarkovStep(
-    ParamProxMixin, ParamGradMixin, ParamMarkovStepMixin, ProxGradStep
+    ParamProxMixin, ParamGradMixin, JVPMixin, VJPMixin, ParamMarkovStepMixin, 
+    ProxGradStep
 ):
     def __init__(
         self,
@@ -293,7 +117,8 @@ class ProxGradParamMarkovStep(
         )
 
 class FISTAParamMarkovStep(
-    ParamProxMixin, ParamGradMixin, ParamMarkovStepMixin, FISTAStep
+    ParamProxMixin, ParamGradMixin, JVPMixin, VJPMixin, ParamMarkovStepMixin,
+    FISTAStep
 ):
     def __init__(
         self,
@@ -316,7 +141,7 @@ class FISTAParamMarkovStep(
 
 
 # Backwards-compatible aliases for the original public API.
-GDMarkovParamStep = GDParamMarkovStep
+GDParamMarkovStep = GDParamMarkovStep
 PolyakMarkovParamStep = PolyakParamMarkovStep
 NesterovMarkovParamStep = NesterovParamMarkovStep
 ProxGradMarkovParamStep = ProxGradParamMarkovStep

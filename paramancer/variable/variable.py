@@ -30,12 +30,11 @@ class Variable:
             )
         self._data = data
     
-    def flatten(self) -> tuple[FlattendType, VSpecType]:
-        return vlatten(self.data)
-    
-    @staticmethod
-    def unflatten(flat: FlattendType, spec: VSpecType) -> Variable:
-        return Variable(unvlatten(flat, spec))
+    def zeros_like(self):
+        flat, spec = vlatten(self.data)
+        zero_flat = tuple(torch.zeros_like(x) for x in flat)
+        zero = unvlatten(zero_flat, spec)
+        return Variable(zero)
     
     # ------------------------
     # Utility: recursive apply

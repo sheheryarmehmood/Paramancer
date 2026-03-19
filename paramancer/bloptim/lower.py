@@ -5,7 +5,7 @@ from typing import Callable, Union, Tuple
 from ..optim.step import OptimizerStep
 from ..optim.optimizer import Optimizer
 from .implicit import ImplicitDifferentiation
-from .step import GDMarkovParamStep
+from .step import GDParamMarkovStep
 from ..variable import Variable
 from ..variable.types import VariableType
 

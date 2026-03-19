@@ -1,9 +1,9 @@
 from __future__ import annotations
-from typing import Any
+from typing import Any, Literal
 import torch
 
 from .types import (
-    VariableType, ParameterType, FlatParameter,
+    VariableType, ParameterType, VariableLike, ParameterLike, FlatParameter,
     FlattendType, VSpecType, PSpecType
 )
 
@@ -151,3 +151,25 @@ def unplatten(flat: FlattendType, spec: PSpecType) -> ParameterType:
                 f"Spec {spec} expects {n} tensors, got {len(flat)}."
             )
         return tuple(flat)
+
+def zeros_like(
+    v: VariableLike | ParameterLike,
+    typ: Literal["variable"] | Literal["parameter"]
+):
+    from .variable import Variable
+    from .parameter import ParameterBundle
+    
+    if typ == "variable":
+        flatten, unflatten = vlatten, unvlatten
+        Type = Variable
+    elif typ == "parameter":
+        flatten, unflatten = platten, unplatten
+        Type = ParameterBundle
+    else:
+        raise ValueError(
+            "`typ` must be either 'variable' or 'parameter'."
+        )
+    v_is_typ = isinstance(v, Type)
+    v_typ = v if v_is_typ else Type(v)
+    v_zero_typ = v_typ.zeros_like()
+    return v_zero_typ if v_is_typ else v_zero_typ.data
