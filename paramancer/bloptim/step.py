@@ -105,10 +105,26 @@ class VJPParamStepMixin:
         *args: P.args,
         **kwargs: P.kwargs
     ) -> tuple[VariableLike, ParameterLike]:
-        return (
-            self.vjp_var(x_in, u_in, grad_out, *args, **kwargs),
-            self.vjp_prm(x_in, u_in, grad_out, *args, **kwargs)
+        x_is_var = isinstance(x_in, Variable)
+        def step(*args: torch.Tensor) -> FlattendType:
+            x = unvlatten(args[:len(x_flat)], x_spec)
+            u = unplatten(args[len(x_flat):], u_spec)
+            out = self.step(x, u, *args, **kwargs)
+            return vlatten(out.data if x_is_var else out)[0]
+        x_flat, x_spec = vlatten(x_in.data if x_is_var else x_in)
+        u_flat, u_spec = platten(
+            u_in.data if isinstance(u_in, ParameterBundle) else u_in
         )
+        grad_out_flat = vlatten(grad_out if x_is_var else grad_out.data)[0]
+        (_, vjp) = torch.func.vjp(step, *x_flat, *u_flat)
+        grad_in_flat = vjp(grad_out_flat)
+        grad_x = unvlatten(grad_in_flat[:len(x_flat)], x_spec)
+        grad_u = unvlatten(grad_in_flat[len(x_flat)], u_spec)
+        return grad_x, grad_u
+        # return (
+        #     self.vjp_var(x_in, u_in, grad_out, *args, **kwargs),
+        #     self.vjp_prm(x_in, u_in, grad_out, *args, **kwargs)
+        # )
 
     def vjp_var(
         self,
@@ -118,17 +134,15 @@ class VJPParamStepMixin:
         *args: P.args,
         **kwargs: P.kwargs
     ) -> VariableLike:
-        x_is_var = isinstance(x_in, Variable)
-        x_in_flat, x_spec = vlatten(x_in if x_is_var else x_in.data)
-        def step_var(
-            *x_flat: torch.Tensor
-        ) -> FlattendType:
+        def step_var(*x_flat: torch.Tensor) -> FlattendType:
             x = unvlatten(x_flat, x_spec)
             out = self.step(x, u_in, *args, **kwargs)
             out_flat = vlatten(out.data if x_is_var else out)[0]
             return out_flat
+        x_is_var = isinstance(x_in, Variable)
+        x_flat, x_spec = vlatten(x_in.data if x_is_var else x_in)
         grad_out_flat = vlatten(grad_out if x_is_var else grad_out.data)[0]
-        (_, vjp_var) = torch.func.vjp(step_var, *x_in_flat)
+        (_, vjp_var) = torch.func.vjp(step_var, *x_flat)
         grad_x_flat = vjp_var(grad_out_flat)
         return unvlatten(grad_x_flat, x_spec)
 
@@ -140,14 +154,12 @@ class VJPParamStepMixin:
         *args: P.args,
         **kwargs: P.kwargs
     ) -> ParameterType:     # No need to convert `grad_u` to `ParameterBundle`.
-        # `x_in`, `grad_out`, and `step` output should all be of same `type`.
-        x_is_var = isinstance(x_in, Variable)
-        def step_prm(
-            *u: FlatParameter
-        ) -> FlattendType:
+        def step_prm(*u: FlatParameter) -> FlattendType:
             out = self.step(x_in, u, *args, **kwargs)
             out_flat = vlatten(out.data if x_is_var else out)[0]
             return out_flat
+        # `x_in`, `grad_out`, and `step` output should all be of same `type`.
+        x_is_var = isinstance(x_in, Variable)
         grad_out_flat = vlatten(grad_out.data if x_is_var else grad_out)[0]
         u_flat, u_spec = platten(
             u_in.data if isinstance(u_in, ParameterBundle) else u_in
@@ -176,10 +188,15 @@ class ParamGradMixin:
         else:
             self.grad_map_prm = grad_map_prm
     
-    def _grad_map(self, x: VariableLike) -> VariableLike:
+    def _grad_map(
+        self,
+        x: VariableLike,
+        *args: P.args,
+        **kwargs: P.kwargs
+    ) -> VariableLike:
         if not self._u_given.takes_params("grad"):
-            return self.grad_map_prm(x)
-        return self.grad_map_prm(x, self._u_given.grad)
+            return self.grad_map_prm(x, *args, **kwargs)
+        return self.grad_map_prm(x, self._u_given.grad, *args, **kwargs)
 
 
 class ParamProxMixin:
