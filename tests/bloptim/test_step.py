@@ -2,7 +2,7 @@ import torch
 import pytest
 from typing import TypeAlias
 
-from paramancer.bloptim.step import FISTAParamMarkovStep
+from paramancer.bloptim.step import FISTAParamMarkovStep, GDMarkovParamStep
 from paramancer.optim.step import FISTAStep
 
 
@@ -88,3 +88,69 @@ def test_fista_param_markov_step():
     assert torch.allclose(x2_new_pm, x2_new)
     
 
+def test_gradient_descent_vjp():
+    def grad_lr(
+        x: torch.Tensor,
+        u: tuple[torch.Tensor, torch.Tensor]
+    ) -> torch.Tensor:
+        A, b = u
+        return A.T @ (A @ x - b)
+    
+    def grad_des(
+        x: torch.Tensor,
+        u: tuple[torch.Tensor, torch.Tensor],
+        ss: torch.Tensor
+    ) -> torch.Tensor:
+        return x - ss * grad_lr(x, u)
+    
+    def vjp_grad_lr(
+        x: torch.Tensor,
+        u: tuple[torch.Tensor, torch.Tensor],
+        grad_out: torch.Tensor
+    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+        A, b = u
+        err = A @ x - b
+        adj_out = A @ grad_out
+        grad_x = A.T @ adj_out
+        grad_A = torch.outer(err, grad_out) + torch.outer(adj_out, x)
+        grad_b = -adj_out
+        return grad_x, (grad_A, grad_b)
+    
+    def vjp_grad_des(
+        x: torch.Tensor,
+        u: tuple[torch.Tensor, torch.Tensor],
+        grad_out: torch.Tensor,
+        ss: torch.Tensor
+    ):
+        grad_x_lr, (grad_A_lr, grad_b_lr) = vjp_grad_lr(x, u, grad_out)
+        grad_x = grad_out - ss * grad_x_lr
+        grad_A = -ss * grad_A_lr
+        grad_b = -ss * grad_b_lr
+        return grad_x, (grad_A, grad_b)
+    
+    ss = torch.tensor(1.)
+    M, N = 10, 5
+    A, b = torch.rand(M, N), torch.randn(M)
+    xk = torch.randn(N)
+    grad_xkp = torch.randn(N)
+    
+    u = (A, b)
+    xkp_pm = grad_des(xk, u, ss)
+    grad_x, (grad_A, grad_b) = vjp_grad_des(xk, u, grad_xkp, ss)
+    
+    u_pm = (A, b)
+    pm_step = GDMarkovParamStep(
+        ss, grad_map_prm=grad_lr, u_in=(A, b)
+    )
+    xkp_pm = pm_step(xk, u_pm)
+    grad_x_pm, (grad_A_pm, grad_b_pm) = pm_step.vjp(xk, u_pm, grad_xkp)
+    
+    assert torch.allclose(grad_x, grad_x_pm)
+    assert torch.allclose(grad_A, grad_A_pm)
+    assert torch.allclose(grad_b, grad_b_pm)
+
+
+def test_gradient_descent_jvp():
+    pass
+        
+    

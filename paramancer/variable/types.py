@@ -56,8 +56,8 @@ PSpecType: TypeAlias = FlatSpec | TupleSpec
 
 
 # Types allowed for Parameter
-FlatParameter = nn.Parameter
-TupleParameter = tuple[nn.Parameter, ...]
+FlatParameter = Tensor
+TupleParameter = tuple[Tensor, ...]
 ParameterList = nn.ParameterList
 ParameterType = FlatParameter | TupleParameter | ParameterList
 

@@ -3,7 +3,8 @@ from typing import Any
 import torch
 
 from .types import (
-    VariableType, ParameterType, FlattendType, VSpecType, PSpecType
+    VariableType, ParameterType, FlatParameter,
+    FlattendType, VSpecType, PSpecType
 )
 
 
@@ -23,7 +24,7 @@ def is_nested_variable(x: Any) -> bool:
     )
 
 def is_parameter(x: Any) -> bool:
-    return isinstance(x, torch.nn.Parameter)
+    return isinstance(x, FlatParameter)
 
 def is_collection_of_parameters(x: Any) -> bool:
     return (
@@ -118,8 +119,8 @@ def platten(par: ParameterType) -> tuple[FlattendType, PSpecType]:
         # vvvv set spec to 'tuple' for both tuple and ParameterList.
         return par, ("tuple", len(par))
     raise TypeError(
-        "Unsupported ParameterType. Expected nn.Parameter, or "
-        "tuple[nn.Parameter,...] or nn.ParameterList."
+        "Unsupported ParameterType. Expected `torch.Tensor`, "
+        "`tuple[torch.Tensor,...]` or `torch.nn.ParameterList`."
     )
 
 def unplatten(flat: FlattendType, spec: PSpecType) -> ParameterType:
@@ -128,7 +129,7 @@ def unplatten(flat: FlattendType, spec: PSpecType) -> ParameterType:
     produced by `platten`.
     """
     if not is_collection_of_parameters(flat):
-        raise TypeError("`flat` must be a tuple of torch.nn.Parameter.")
+        raise TypeError("`flat` must be a tuple of torch.Tensor.")
     
     if not isinstance(spec, tuple) or len(spec) < 1:
         raise TypeError("`spec` must be a non-empty tuple.")

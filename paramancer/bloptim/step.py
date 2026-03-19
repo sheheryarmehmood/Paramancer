@@ -11,7 +11,8 @@ from ..operators.grad import gradient
 from ..variable import Variable, ParameterBundle
 from ..variable.util import vlatten, unvlatten, platten, unplatten
 from ..variable.types import (
-    IndexMapType, ScalarLike, VariableLike, ParameterLike, ParameterType,
+    IndexMapType, ScalarLike, VariableLike,
+    ParameterLike, ParameterType, FlatParameter,
     FlattendType, P,
     ParamSmoothObjType, ParamGradMapType, ParamProxMapType,
     MomentumSchedType, StepsizeSchedType
@@ -95,7 +96,7 @@ class ParamMarkovStepMixin:
             self._u_given.data = u_in
 
 
-class VJPStepMixin:
+class VJPParamStepMixin:
     def vjp(
         self,
         x_in: VariableLike,
@@ -124,9 +125,9 @@ class VJPStepMixin:
         ) -> FlattendType:
             x = unvlatten(x_flat, x_spec)
             out = self.step(x, u_in, *args, **kwargs)
-            out_flat, = out.flatten()
+            out_flat = vlatten(out.data if x_is_var else out)[0]
             return out_flat
-        grad_out_flat, = vlatten(grad_out if x_is_var else grad_out.data)
+        grad_out_flat = vlatten(grad_out if x_is_var else grad_out.data)[0]
         (_, vjp_var) = torch.func.vjp(step_var, *x_in_flat)
         grad_x_flat = vjp_var(grad_out_flat)
         return unvlatten(grad_x_flat, x_spec)
@@ -142,20 +143,18 @@ class VJPStepMixin:
         # `x_in`, `grad_out`, and `step` output should all be of same `type`.
         x_is_var = isinstance(x_in, Variable)
         def step_prm(
-            *u: torch.nn.Parameter
+            *u: FlatParameter
         ) -> FlattendType:
             out = self.step(x_in, u, *args, **kwargs)
-            out_flat, = vlatten(out.data if x_is_var else out)
+            out_flat = vlatten(out.data if x_is_var else out)[0]
             return out_flat
-        grad_out_flat, = vlatten(grad_out.data if x_is_var else grad_out)
+        grad_out_flat = vlatten(grad_out.data if x_is_var else grad_out)[0]
         u_flat, u_spec = platten(
             u_in.data if isinstance(u_in, ParameterBundle) else u_in
         )
         (_, vjp_prm) = torch.func.vjp(step_prm, *u_flat)
         grad_u_flat = vjp_prm(grad_out_flat)
         return unplatten(grad_u_flat, u_spec)
-        
-        
 
 
 class ParamGradMixin:
@@ -193,7 +192,9 @@ class ParamProxMixin:
         return self.prox_map_prm(x, self._u_given.prox)
 
 
-class GDParamMarkovStep(ParamGradMixin, ParamMarkovStepMixin, GDStep):
+class GDParamMarkovStep(
+    ParamGradMixin, VJPParamStepMixin, ParamMarkovStepMixin, GDStep
+):
     def __init__(
         self,
         stepsize: ScalarLike,
