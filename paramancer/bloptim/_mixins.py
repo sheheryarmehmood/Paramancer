@@ -155,7 +155,7 @@ class VJPMixin:
         u_is_par = isinstance(u_in, ParameterBundle)
         x_flat, x_spec = vlatten(x_in.data if x_is_var else x_in)
         u_flat, u_spec = platten(u_in.data if u_is_par else u_in)
-        grad_out_flat, _ = vlatten(grad_out if x_is_var else grad_out.data)
+        grad_out_flat, _ = vlatten(grad_out.data if x_is_var else grad_out)
         step = flatten_inputs(self.step, x_spec, u_spec, *args, **kwargs)
         (_, vjp) = torch.func.vjp(step, *x_flat, *u_flat)
         grad_in_flat = vjp(grad_out_flat)

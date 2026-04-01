@@ -26,6 +26,11 @@ def to_float_scalar(x: ScalarLike) -> float:
     return float(x)
 
 
+# TODO: Probably I should put it in `variables/util.py`. It should accompany
+# with `ensure_raw_input` method which does the opposite of this. I think,
+# with little effort the two methods can be made agnostic of whether the 
+# source or destination Type is `Variable` or `ParameterBundle`. Also, I think
+# I should change the names `Variable` and `ParameterBundle`.
 def ensure_var_input(fn: WrapperIn) -> WrapperOut:
     @wraps(fn)
     def wrapper(

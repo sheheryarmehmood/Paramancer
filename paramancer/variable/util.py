@@ -38,7 +38,12 @@ def is_valid_variable(x: Any) -> bool:
 def is_valid_parameter(x: Any) -> bool:
     return is_parameter(x) or is_collection_of_parameters(x)
 
-
+# TODO: Perhaps, I should come up with unified `flatten` and `unflatten` 
+# methods which apply to both `VariableType` and `ParameterType`. One way to
+# do that is to implement one base class which handles all the arithmetic and
+# does not differentiate between if it is a lower or an upper variable. It 
+# also has methods to `flatten` and `unflatten` its data. Then I inherit both
+# `Variable` and `ParameterBundle` from it.
 def vlatten(data: VariableType) -> tuple[FlattendType, VSpecType]:
     """
     Flattens `VariableType` into a flat tuple of tensors plus a spec to 
@@ -152,9 +157,11 @@ def unplatten(flat: FlattendType, spec: PSpecType) -> ParameterType:
             )
         return tuple(flat)
 
+# Maybe move it to the new proposed base class or wrap it with the 
+# `ensure_raw_input` method.
 def zeros_like(
     v: VariableLike | ParameterLike,
-    typ: Literal["variable"] | Literal["parameter"]
+    typ: Literal["variable"] | Literal["parameter"] = "variable"
 ):
     from .variable import Variable
     from .parameter import ParameterBundle

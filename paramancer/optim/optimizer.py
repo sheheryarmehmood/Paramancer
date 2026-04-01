@@ -9,6 +9,7 @@ from .step import (
     ProxGradStep, FISTAStep, PDHGStep
 )
 from .util import OptimizationResult, to_float_scalar, ensure_var_input
+from ..variable.util import zeros_like
 from ..variable.types import (
     PSmoothObjType, PGradMapType, ProxMapType, LinOpType,
     MomentumSchedType, MetricSpec,
@@ -43,6 +44,9 @@ class Optimizer:
     ) -> VariableLike:
         return self.run(x_init, *args, iters=iters, **kwargs)
     
+    # I think I can implement `clone` as a non-member function which applies
+    # to raw and `Variable` inputs. That will allow me to simply remove
+    # the decorate below.
     @ensure_var_input
     def run(
         self, x_init: Variable, *args: Any,
@@ -115,8 +119,9 @@ class NeumannSeries(Optimizer):
         iters: int | None = None, **kwargs: Any
     ) -> VariableLike:
         if init is None:
-            init = torch.zeros_like(self.step.vector.data)
-        return self.run(init, *args, iters=iters, **kwargs)
+            init = zeros_like(self.step.vector.data)
+        out = self.run(init, *args, iters=iters, **kwargs)
+        return out
 
 
 class GradientDescent(Optimizer):
