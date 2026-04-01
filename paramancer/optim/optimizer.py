@@ -13,7 +13,7 @@ from ..variable.util import zeros_like
 from ..variable.types import (
     PSmoothObjType, PGradMapType, ProxMapType, LinOpType,
     MomentumSchedType, MetricSpec,
-    ScalarLike, FlatVariable, TupleVariable, VariableLike
+    ScalarLike, TensorVar, TupleVar, VariableLike
 )
 
 class Optimizer:
@@ -242,7 +242,7 @@ class PDHG(Optimizer):
         prox_map_dual: ProxMapType,
         lin_op: LinOpType,
         lin_op_adj: LinOpType | None = None,
-        zero_el: FlatVariable | TupleVariable | None = None,
+        zero_el: TensorVar | TupleVar | None = None,
         tol: float = 1e-5,
         iters: int = 100,
         metric: MetricSpec | None = None,

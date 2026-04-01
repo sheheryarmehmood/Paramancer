@@ -3,14 +3,14 @@ import torch
 
 from ..variable import Variable
 from ..variable.types import (
-    TupleVariable, BaseVariableType,
+    TupleVar, OptVarType,
     ParameterList, is_parameter_type,
     PLinOpType
 )
 
 
 def adjoint(
-    lin_op: PLinOpType, zero_el: BaseVariableType
+    lin_op: PLinOpType, zero_el: OptVarType
 ) -> PLinOpType:
     """Returns the adjoint (transpose) of a given linear map.
 
@@ -68,7 +68,7 @@ def adjoint(
     else:
         zero_el = zero_data.detach().clone()
 
-    def lin_op_adj(y: BaseVariableType, *args, **kwargs):
+    def lin_op_adj(y: OptVarType, *args, **kwargs):
         outer_grad_enabled = torch.is_grad_enabled()
         if zero_was_var and not isinstance(y, Variable):
             raise TypeError("Expected `y` to be Variable when zero_el is Variable.")

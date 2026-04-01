@@ -5,7 +5,7 @@ from typing import Any
 
 from ..variable import Variable, vlatten, unvlatten
 from ..variable.types import (
-    BaseVariableType, ParameterList, is_parameter_type,
+    OptVarType, ParameterList, is_parameter_type,
     PSmoothObjType, PGradMapType
 )
 
@@ -106,7 +106,7 @@ def gradient(smooth: PSmoothObjType) -> PGradMapType:
 
 def _gradient(
     smooth: Callable[..., torch.Tensor], *dargs: int
-) -> Callable[..., BaseVariableType]:
+) -> Callable[..., OptVarType]:
     """
     Create a callable that computes the partial gradient of a smooth function.
     

@@ -6,6 +6,7 @@ from .types import (
     IndexMapType, ParameterType
 )
 
+# TODO: Consider chaning the name of this class (`ParameterBundle`) to something else which also demonstrates its usage in the lower level optimization problem. Maybe `OuterOptVar`, `OuterVariable`, `OuterVar` or something like that. The reason is that the name `ParameterBundle` is very generic and can be easily cause confusion. This will also require changing the name of `ParameterLike` and `ParameterType` to something else. Also, the name of the file `parameter.py` can also be changed to something else like `outer.py` or something like that.
 class ParameterBundle:
     def __init__(
         self,

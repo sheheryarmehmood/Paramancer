@@ -38,24 +38,18 @@ def is_valid_variable(x: Any) -> bool:
 def is_valid_parameter(x: Any) -> bool:
     return is_parameter(x) or is_collection_of_parameters(x)
 
-# TODO: Perhaps, I should come up with unified `flatten` and `unflatten` 
-# methods which apply to both `VariableType` and `ParameterType`. One way to
-# do that is to implement one base class which handles all the arithmetic and
-# does not differentiate between if it is a lower or an upper variable. It 
-# also has methods to `flatten` and `unflatten` its data. Then I inherit both
-# `Variable` and `ParameterBundle` from it.
 def vlatten(data: VariableType) -> tuple[FlattendType, VSpecType]:
     """
     Flattens `VariableType` into a flat tuple of tensors plus a spec to 
     reconstruct it.
 
     Spec encodings:
-    - `("flat",)`
+    - `("tensor",)`
     - `("tuple", n)`
     - `("nested", n_left, n_right)`
     """
     if is_tensor(data):
-        return (data,), ("flat",)
+        return (data,), ("tensor",)
     
     if is_tuple_of_tensors(data):
         return data, ("tuple", len(data))
@@ -82,7 +76,7 @@ def unvlatten(flat: FlattendType, spec: VSpecType) -> VariableType:
         raise TypeError("`spec` must be a non-empty tuple.")
     
     tag = spec[0]
-    if tag == "flat":
+    if tag == "tensor":
         if len(flat) != 1:
             raise ValueError(
                 f"Spec {spec} expects exactly 1 tensor, got {len(flat)}."
@@ -119,7 +113,7 @@ def unvlatten(flat: FlattendType, spec: VSpecType) -> VariableType:
 
 def platten(par: ParameterType) -> tuple[FlattendType, PSpecType]:
     if is_parameter(par):
-        return (par,), ("flat",)
+        return (par,), ("tensor",)
     if is_collection_of_parameters(par):
         # vvvv set spec to 'tuple' for both tuple and ParameterList.
         return par, ("tuple", len(par))
@@ -140,7 +134,7 @@ def unplatten(flat: FlattendType, spec: PSpecType) -> ParameterType:
         raise TypeError("`spec` must be a non-empty tuple.")
     
     tag = spec[0]
-    if tag == "flat":
+    if tag == "tensor":
         if len(flat) != 1:
             raise ValueError(
                 f"Spec {spec} expects exactly 1 tensor, got {len(flat)}."
@@ -157,7 +151,7 @@ def unplatten(flat: FlattendType, spec: PSpecType) -> ParameterType:
             )
         return tuple(flat)
 
-# Maybe move it to the new proposed base class or wrap it with the 
+# TODO: Maybe move it to the new proposed base class or wrap it with the 
 # `ensure_raw_input` method.
 def zeros_like(
     v: VariableLike | ParameterLike,

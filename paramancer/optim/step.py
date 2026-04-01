@@ -11,7 +11,7 @@ from ..operators.grad import gradient
 from ..variable.types import (
     PSmoothObjType, PGradMapType, ProxMapType, LinOpType,
     MomentumSchedType, StepsizeSchedType,
-    ScalarLike, BaseVariableType, VariableLike
+    ScalarLike, OptVarType, VariableLike
 )
 
 
@@ -147,7 +147,7 @@ class AffineStep(OptimizerStep):
     def __init__(
         self,
         lin_op: LinOpType,
-        vector: BaseVariableType,
+        vector: OptVarType,
         tracking: bool = False
     ):
         super().__init__(tracking=tracking)
@@ -352,11 +352,11 @@ class PDHGPartialStep(OptimizerStep):
     
     def __call__(
         self,
-        inp_curr: BaseVariableType, 
-        oth_curr: BaseVariableType,
+        inp_curr: OptVarType, 
+        oth_curr: OptVarType,
         *args: Any,
         **kwargs: Any
-    ) -> BaseVariableType:
+    ) -> OptVarType:
         return self.step(inp_curr, oth_curr, *args, **kwargs)
     
     @ensure_var_input
@@ -377,7 +377,7 @@ class PDHGStep(OptimizerStep):
         prox_map_dual: ProxMapType,
         lin_op: LinOpType,
         lin_op_adj: LinOpType | None = None,
-        zero_el: BaseVariableType | None = None,
+        zero_el: OptVarType | None = None,
         tracking: bool = False
     ):
         super().__init__(tracking)

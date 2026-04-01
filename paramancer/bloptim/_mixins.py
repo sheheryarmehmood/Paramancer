@@ -1,6 +1,5 @@
 from __future__ import annotations
 import torch
-from collections.abc import Callable
 
 from ..optim.util import ensure_var_input
 from ..operators.grad import gradient
@@ -8,7 +7,7 @@ from ..variable import Variable, ParameterBundle
 from ..variable.util import vlatten, unvlatten, platten, unplatten
 from ..variable.types import (
     IndexMapType, VariableLike,
-    ParameterLike, ParameterType, FlatParameter,
+    ParameterLike, ParameterType,
     FlattendType, VSpecType, PSpecType, P,
     ParamSmoothObjType, ParamGradMapType, ParamProxMapType
 )
