@@ -1,71 +1,93 @@
 from __future__ import annotations
-from enum import Enum
+
 import abc
+from enum import Enum
 from typing import Any
 
-from .util import ensure_var_input
-from ..variable import Variable
 from .scheduler import MomentumScheduler
-from ..operators.linalg import adjoint
+from .util import ensure_flat_input, ensure_pair_input
 from ..operators.grad import gradient
+from ..operators.linalg import adjoint
+from ..variable.flat import FlatVar
+from ..variable.pair import PairVar
 from ..variable.types import (
-    PSmoothObjType, PGradMapType, ProxMapType, LinOpType,
-    MomentumSchedType, StepsizeSchedType,
-    ScalarLike, OptVarType, VariableLike
+    AlgoVarLike,
+    FlatLinOpType,
+    FlatRawVarType,
+    FlatVarLike,
+    LinOpType,
+    MomentumSchedType,
+    PGradMapType,
+    ProxMapType,
+    PSmoothObjType,
+    ScalarLike,
+    StepsizeSchedType,
 )
+from ..variable.util import as_flat_var, as_pair_var, is_flat_var, is_pair_raw_var, is_pair_var
+
+
+def _wrap_flat_map(fn):
+    def wrapped(x: FlatVar, *args: Any, **kwargs: Any) -> FlatVar:
+        return FlatVar(fn(x.data, *args, **kwargs))
+
+    return wrapped
+
+
+def _wrap_pair_map(fn):
+    def wrapped(x: PairVar, *args: Any, **kwargs: Any) -> PairVar:
+        return PairVar(fn(x.data, *args, **kwargs))
+
+    return wrapped
 
 
 class MomentumType(Enum):
     Nesterov = "Nesterov"
     Polyak = "Polyak"
 
+
 class OptimizerStep(abc.ABC):
     def __init__(self, tracking: bool = False):
         self._residual_tracking = tracking
         if self._residual_tracking:
-            self._residual: Variable | None = None
-        self._input_is_variable = True
-    
+            self._residual: FlatVar | PairVar | None = None
+        self._input_is_wrapper = True
+
     @abc.abstractmethod
-    def step(
-        self, x_curr: Variable, *args: Any, **kwargs: Any
-    ) -> Variable:
+    def step(self, x_curr, *args: Any, **kwargs: Any):
         pass
-    
-    def __call__(
-        self, x_curr: VariableLike, *args: Any, **kwargs: Any
-    ) -> VariableLike:
-        self._input_is_variable = isinstance(x_curr, Variable)
+
+    def __call__(self, x_curr: AlgoVarLike, *args: Any, **kwargs: Any):
+        self._input_is_wrapper = is_flat_var(x_curr) or is_pair_var(x_curr)
         return self.step(x_curr, *args, **kwargs)
-    
+
     @property
-    def residual(self):
-        if not hasattr(self, '_residual'):
+    def residual(self) -> AlgoVarLike:
+        if not hasattr(self, "_residual"):
             raise RuntimeError(
                 "residual tracking is disabled for this step instance."
             )
         if self._residual is None:
             raise AttributeError("`residual` must be set before referencing")
-        if self._input_is_variable:
-            return self._residual
-        else:
-            return self._residual.data
-    
+        return (
+            self._residual if self._input_is_wrapper else self._residual.data
+        )
+
     @property
-    def residual_tracking(self):
+    def residual_tracking(self) -> bool:
         return self._residual_tracking
-    
+
     def is_markovian(self):
         return not hasattr(self, "_x_prev")
+
 
 class MomentumStep(OptimizerStep):
     def __init__(
         self,
         momentum: ScalarLike,
         strategy: MomentumType = MomentumType.Nesterov,
-        momentum_scheduler: MomentumSchedType | None = None
+        momentum_scheduler: MomentumSchedType | None = None,
     ):
-        super().__init__(tracking=False) # No tracking is needed.
+        super().__init__(tracking=False)
         if not isinstance(strategy, MomentumType):
             raise TypeError(
                 "parameter strategy can only be either "
@@ -74,44 +96,45 @@ class MomentumStep(OptimizerStep):
         self.momentum = momentum
         self.strategy = strategy
         self.momentum_scheduler = momentum_scheduler
-    
-    @ensure_var_input
-    def step(self, z_curr: Variable) -> Variable:
+
+    @ensure_pair_input
+    def step(self, z_curr: PairVar) -> PairVar:
         if self.momentum_scheduler:
             self.momentum = self.momentum_scheduler()
-        x_new = self.momentum * (z_curr.current - z_curr.previous)
+        x_new = self.momentum * (z_curr.first - z_curr.second)
         if self.strategy == MomentumType.Nesterov:
-            x_new = z_curr.current + x_new
-        return x_new
-    
+            x_new = z_curr.first + x_new
+        return PairVar(x_new, z_curr.first)
+
     def is_markovian(self):
         return False
 
+
 class GDStep(OptimizerStep):
     def __init__(
-        self, 
+        self,
         stepsize: ScalarLike,
         smooth_obj: PSmoothObjType | None = None,
         grad_map: PGradMapType | None = None,
         stepsize_scheduler: StepsizeSchedType | None = None,
         linesearch: bool = True,
-        tracking: bool = False
+        tracking: bool = False,
     ):
         super().__init__(tracking=tracking)
         self.stepsize = stepsize
         self._init_grad_map(smooth_obj, grad_map)
         self.stepsize_scheduler = stepsize_scheduler
         self.linesearch = linesearch
-    
-    @ensure_var_input
-    def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
-        direction = -self.grad_map(x_curr, *args, **kwargs)
-        self._set_stepsize(x_curr, direction)
-        x_new = x_curr + self.stepsize * direction
+
+    @ensure_flat_input
+    def step(self, x_curr: FlatVar, *args: Any, **kwargs: Any) -> FlatVar:
+        d_curr = -self.grad_map(x_curr, *args, **kwargs)
+        self._set_stepsize(x_curr, d_curr)
+        x_new = x_curr + self.stepsize * d_curr
         if self._residual_tracking:
             self._residual = x_new - x_curr
         return x_new
-    
+
     def _init_grad_map(self, smooth_obj, grad_map):
         if (smooth_obj is None) == (grad_map is None):
             raise ValueError(
@@ -119,47 +142,52 @@ class GDStep(OptimizerStep):
                 " both. One of them must be set to `None`."
             )
         if grad_map is None:
-            self.grad_map = Variable.wrap(gradient(smooth_obj))
+            self.grad_map = _wrap_flat_map(gradient(smooth_obj))
         else:
-            self.grad_map = Variable.wrap(grad_map)
-    
-    def _set_stepsize(self, x_curr: Variable, direction: Variable) -> None:
+            self.grad_map = _wrap_flat_map(grad_map)
+
+    def _set_stepsize(self, x_curr: FlatVar, d_curr: FlatVar) -> None:
         if not self.stepsize_scheduler:
             return
         if self.linesearch:
-            self.stepsize = self.stepsize_scheduler(x_curr, direction)
+            self.stepsize = self.stepsize_scheduler(x_curr.data, d_curr.data)
         else:
             self.stepsize = self.stepsize_scheduler()
 
+
 class ProxStep(OptimizerStep):
-    def __init__(
-        self,
-        prox_map: ProxMapType
-    ):
-        super().__init__(tracking=False) # No tracking is needed.
-        self.prox_map = Variable.wrap(prox_map)
-    
-    @ensure_var_input
-    def step(self, x_curr: Variable) -> Variable:
+    def __init__(self, prox_map: ProxMapType):
+        super().__init__(tracking=False)
+        self.prox_map = _wrap_flat_map(prox_map)
+
+    @ensure_flat_input
+    def step(self, x_curr: FlatVar) -> FlatVar:
         return self.prox_map(x_curr)
 
 class AffineStep(OptimizerStep):
     def __init__(
         self,
         lin_op: LinOpType,
-        vector: OptVarType,
-        tracking: bool = False
+        vector: AlgoVarLike,
+        tracking: bool = False,
     ):
         super().__init__(tracking=tracking)
-        self.lin_op = Variable.wrap(lin_op)
-        self.vector = Variable(vector)
-    
-    @ensure_var_input
-    def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
-        x_new = self.lin_op(x_curr, *args, **kwargs) + self.vector
+        self._pair_mode = is_pair_raw_var(vector) or is_pair_var(vector)
+        if self._pair_mode:
+            self.lin_op = _wrap_pair_map(lin_op)
+            self.vector = as_pair_var(vector)
+        else:
+            self.lin_op = _wrap_flat_map(lin_op)
+            self.vector = as_flat_var(vector)
+
+    def step(self, x_curr: AlgoVarLike, *args: Any, **kwargs: Any) -> AlgoVarLike:
+        self._input_is_wrapper = is_flat_var(x_curr) or is_pair_var(x_curr)
+        x_var = as_pair_var(x_curr) if self._pair_mode else as_flat_var(x_curr)
+        x_new = self.lin_op(x_var, *args, **kwargs) + self.vector
         if self._residual_tracking:
-            self._residual = x_new - x_curr
-        return x_new
+            self._residual = x_new - x_var
+        return x_new if self._input_is_wrapper else x_new.data
+
 
 class PolyakStep(OptimizerStep):
     def __init__(
@@ -168,44 +196,44 @@ class PolyakStep(OptimizerStep):
         momentum: ScalarLike,
         smooth_obj: PSmoothObjType | None = None,
         grad_map: PGradMapType | None = None,
-        tracking: bool = False
+        tracking: bool = False,
     ):
-        super().__init__(tracking=False) # Uses the tracking of GDStep
+        super().__init__(tracking=False)
         self.gd_step = GDStep(
             stepsize, smooth_obj=smooth_obj, grad_map=grad_map, 
             tracking=tracking
         )
         self.mm_step = MomentumStep(momentum, strategy=MomentumType.Polyak)
         self._x_prev = None
-    
-    @ensure_var_input
-    def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
+
+    @ensure_flat_input
+    def step(self, x_curr: FlatVar, *args: Any, **kwargs: Any) -> FlatVar:
         x_new = self.gd_step(x_curr, *args, **kwargs)
         if self._x_prev is not None:
-            z_curr = Variable.from_momentum(x_curr, self._x_prev)
-            # vvvvv torch.Tensor Operation vvvvv
-            x_new = x_new + self.mm_step(z_curr)
+            z_curr = PairVar(x_curr, self._x_prev)
+            x_new = x_new + self.mm_step(z_curr).first
         self._x_prev = x_curr
         return x_new
-    
+
     @property
-    def residual(self):
-        self.gd_step._input_is_variable = self._input_is_variable
+    def residual(self) -> FlatVarLike:
+        self.gd_step._input_is_wrapper = self._input_is_wrapper
         return self.gd_step.residual
-    
+
     @property
-    def residual_tracking(self):
+    def residual_tracking(self) -> bool:
         return self.gd_step.residual_tracking
-    
+
     @property
-    def x_prev(self):
+    def x_prev(self) -> FlatVar:
         if self._x_prev is None:
             raise RuntimeError("`x_prev` accessed before assignment.")
         return self._x_prev
-    
+
     @x_prev.setter
     def x_prev(self, x):
         self._x_prev = x
+
 
 class NesterovStep(OptimizerStep):
     def __init__(
@@ -214,9 +242,9 @@ class NesterovStep(OptimizerStep):
         smooth_obj: PSmoothObjType | None = None,
         grad_map: PGradMapType | None = None,
         momentum_scheduler: MomentumSchedType | None = None,
-        tracking: bool = False
+        tracking: bool = False,
     ):
-        super().__init__(tracking=False) # Uses the tracking of GDStep
+        super().__init__(tracking=False)
         if momentum_scheduler is None:
             momentum_scheduler = MomentumScheduler()
         self.gd_step = GDStep(
@@ -227,38 +255,39 @@ class NesterovStep(OptimizerStep):
             momentum=None, momentum_scheduler=momentum_scheduler
         )
         self._x_prev = None
-    
-    @ensure_var_input
-    def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
+
+    @ensure_flat_input
+    def step(self, x_curr: FlatVar, *args: Any, **kwargs: Any) -> FlatVar:
         if self._x_prev is None:
             self._x_prev = x_curr
-        z_curr = Variable.from_momentum(x_curr, self._x_prev)
-        x_new = self.gd_step(self.mm_step(z_curr), *args, **kwargs)
+        z_curr = PairVar(x_curr, self._x_prev)
+        x_new = self.gd_step(self.mm_step(z_curr).first, *args, **kwargs)
         self._x_prev = x_curr
         return x_new
-    
+
     @property
-    def residual(self):
-        self.gd_step._input_is_variable = self._input_is_variable
+    def residual(self) -> FlatVarLike:
+        self.gd_step._input_is_wrapper = self._input_is_wrapper
         return self.gd_step.residual
-    
+
     @property
-    def residual_tracking(self):
+    def residual_tracking(self) -> bool:
         return self.gd_step.residual_tracking
-    
+
     @property
-    def x_prev(self):
+    def x_prev(self) -> FlatVar:
         if self._x_prev is None:
             raise RuntimeError("`x_prev` accessed before assignment.")
         return self._x_prev
-    
+
     @x_prev.setter
     def x_prev(self, x):
         self._x_prev = x
-    
+
     def restart(self):
         self._x_prev = None
         self.mm_step.momentum_scheduler.restart()
+
 
 class ProxGradStep(OptimizerStep):
     def __init__(
@@ -267,21 +296,21 @@ class ProxGradStep(OptimizerStep):
         prox_map: ProxMapType,
         smooth_obj: PSmoothObjType | None = None,
         grad_map: PGradMapType | None = None,
-        tracking: bool = False
+        tracking: bool = False,
     ):
         super().__init__(tracking=tracking)
         self.gd_step = GDStep(
-            stepsize, smooth_obj=smooth_obj, grad_map=grad_map, 
-            tracking=False
+            stepsize, smooth_obj=smooth_obj, grad_map=grad_map, tracking=False
         )
         self.prox_step = ProxStep(prox_map)
-    
-    @ensure_var_input
-    def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
+
+    @ensure_flat_input
+    def step(self, x_curr: FlatVar, *args: Any, **kwargs: Any) -> FlatVar:
         x_new = self.prox_step(self.gd_step(x_curr, *args, **kwargs))
         if self._residual_tracking:
-            self._residual = x_new - x_curr         # torch.Tensor Operation
+            self._residual = x_new - x_curr
         return x_new
+
 
 class FISTAStep(OptimizerStep):
     def __init__(
@@ -291,80 +320,84 @@ class FISTAStep(OptimizerStep):
         smooth_obj: PSmoothObjType | None = None,
         grad_map: PGradMapType | None = None,
         momentum_scheduler: MomentumSchedType | None = None,
-        tracking: bool = False
+        tracking: bool = False,
     ):
-        super().__init__(tracking=False) # Uses the tracking of ProxGradStep
+        super().__init__(tracking=False)
         if momentum_scheduler is None:
             momentum_scheduler = MomentumScheduler()
         self.pgd_step = ProxGradStep(
-            stepsize, prox_map, smooth_obj=smooth_obj, 
-            grad_map=grad_map, tracking=tracking
+            stepsize,
+            prox_map,
+            smooth_obj=smooth_obj,
+            grad_map=grad_map,
+            tracking=tracking,
         )
         self.mm_step = MomentumStep(
             momentum=None, momentum_scheduler=momentum_scheduler
         )
         self._x_prev = None
-    
-    @ensure_var_input
-    def step(self, x_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
+
+    @ensure_flat_input
+    def step(self, x_curr: FlatVar, *args: Any, **kwargs: Any) -> FlatVar:
         if self._x_prev is None:
             self._x_prev = x_curr
-        z_curr = Variable.from_momentum(x_curr, self._x_prev)
-        x_new = self.pgd_step(self.mm_step(z_curr), *args, **kwargs)
+        z_curr = PairVar(x_curr, self._x_prev)
+        x_new = self.pgd_step(self.mm_step(z_curr).first, *args, **kwargs)
         self._x_prev = x_curr
         return x_new
-    
+
     @property
-    def residual(self):
-        self.pgd_step._input_is_variable = self._input_is_variable
+    def residual(self) -> FlatVarLike:
+        self.pgd_step._input_is_wrapper = self._input_is_wrapper
         return self.pgd_step.residual
-    
+
     @property
-    def residual_tracking(self):
+    def residual_tracking(self) -> bool:
         return self.pgd_step.residual_tracking
-    
+
     @property
-    def x_prev(self):
+    def x_prev(self) -> FlatVar:
         if self._x_prev is None:
             raise RuntimeError("`x_prev` accessed before assignment.")
         return self._x_prev
-    
+
     @x_prev.setter
     def x_prev(self, x):
         self._x_prev = x
-    
+
     def restart(self):
         self._x_prev = None
         self.mm_step.momentum_scheduler.restart()
 
-
 class PDHGPartialStep(OptimizerStep):
     def __init__(
-        self,
-        stepsize: ScalarLike,
-        prox_map: ProxMapType,
-        lin_op: LinOpType
+        self, stepsize: ScalarLike, prox_map: ProxMapType, lin_op: FlatLinOpType
     ):
-        super().__init__(tracking=False) # No tracking is needed.
+        super().__init__(tracking=False)
         self.stepsize = stepsize
-        self.lin_op = Variable.wrap(lin_op)
+        self.lin_op = _wrap_flat_map(lin_op)
         self.prox_step = ProxStep(prox_map)
-    
+
     def __call__(
         self,
-        inp_curr: OptVarType, 
-        oth_curr: OptVarType,
+        inp_curr: FlatVarLike,
+        oth_curr: FlatVarLike,
+        *args: Any,
+        **kwargs: Any,
+    ) -> FlatVarLike:
+        return self.step(inp_curr, oth_curr, *args, **kwargs)
+
+    @ensure_flat_input
+    def step(
+        self,
+        inp_curr: FlatVar,
+        oth_curr: FlatVarLike,
         *args: Any,
         **kwargs: Any
-    ) -> OptVarType:
-        return self.step(inp_curr, oth_curr, *args, **kwargs)
-    
-    @ensure_var_input
-    def step(
-        self, inp_curr: Variable, oth_curr: Variable, *args: Any, **kwargs: Any
-    ) -> Variable:
+    ) -> FlatVar:
+        oth_var = as_flat_var(oth_curr)
         return self.prox_step(
-            inp_curr - self.stepsize * self.lin_op(oth_curr, *args, **kwargs)
+            inp_curr - self.stepsize * self.lin_op(oth_var, *args, **kwargs)
         )
 
 
@@ -375,10 +408,10 @@ class PDHGStep(OptimizerStep):
         stepsize_dual: ScalarLike,
         prox_map_primal: ProxMapType,
         prox_map_dual: ProxMapType,
-        lin_op: LinOpType,
-        lin_op_adj: LinOpType | None = None,
-        zero_el: OptVarType | None = None,
-        tracking: bool = False
+        lin_op: FlatLinOpType,
+        lin_op_adj: FlatLinOpType | None = None,
+        zero_el: FlatRawVarType | None = None,
+        tracking: bool = False,
     ):
         super().__init__(tracking)
         if (lin_op_adj is None) == (zero_el is None):
@@ -391,17 +424,14 @@ class PDHGStep(OptimizerStep):
         self.primal_step = PDHGPartialStep(
             stepsize_primal, prox_map_primal, lin_op_adj
         )
-        self.dual_step = PDHGPartialStep(
-            stepsize_dual, prox_map_dual, lin_op
-        )
-    
-    @ensure_var_input
-    def step(self, z_curr: Variable, *args: Any, **kwargs: Any) -> Variable:
-        x_prim = self.primal_step(z_curr.primal, z_curr.dual, *args, **kwargs)
-        x_prim_mm = 2 * x_prim - z_curr.primal
-        x_dual = self.dual_step(z_curr.dual, -x_prim_mm, *args, **kwargs)
-        z_new = Variable.from_pdhg(x_prim, x_dual)
+        self.dual_step = PDHGPartialStep(stepsize_dual, prox_map_dual, lin_op)
+
+    @ensure_pair_input
+    def step(self, z_curr: PairVar, *args: Any, **kwargs: Any) -> PairVar:
+        x_prim = self.primal_step(z_curr.first, z_curr.second, *args, **kwargs)
+        x_prim_mm = 2 * x_prim - z_curr.first
+        x_dual = self.dual_step(z_curr.second, -x_prim_mm, *args, **kwargs)
+        z_new = PairVar(x_prim, x_dual)
         if self._residual_tracking:
-            self._residual = z_new - z_curr         # torch.Tensor Operation
+            self._residual = z_new - z_curr
         return z_new
-        

@@ -1,24 +1,34 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from functools import wraps
+
 import torch
 
-from ..variable import Variable
 from ..variable.types import (
-    VariableLike, ScalarLike,
-    WrapperIn, WrapperOut, Owner, P
+    AlgoVarLike,
+    FlatVarLike,
+    FlatWrapperIn,
+    FlatWrapperOut,
+    Owner,
+    P,
+    PairVarLike,
+    PairWrapperIn,
+    PairWrapperOut,
+    ScalarLike,
 )
+from ..variable.util import as_flat_var, as_pair_var, is_flat_var, is_pair_var
 
 
 @dataclass
 class OptimizationResult:
-    solution: VariableLike
+    solution: AlgoVarLike
     iterations: int
     metric: float | None
     converged: bool
 
+
 def to_float_scalar(x: ScalarLike) -> float:
-    """Convert a scalar-like (float or 0-dim tensor) into a Python float."""
     if isinstance(x, torch.Tensor):
         if x.numel() != 1:
             raise ValueError("Expected a scalar tensor for metric value.")
@@ -26,23 +36,37 @@ def to_float_scalar(x: ScalarLike) -> float:
     return float(x)
 
 
-# TODO: Probably I should put it in `variables/util.py`. It should accompany
-# with `ensure_raw_input` method which does the opposite of this. I think,
-# with little effort the two methods can be made agnostic of whether the 
-# source or destination Type is `Variable` or `ParameterBundle`. Also, I think
-# I should change the names `Variable` and `ParameterBundle`.
-def ensure_var_input(fn: WrapperIn) -> WrapperOut:
+def ensure_flat_input(fn: FlatWrapperIn) -> FlatWrapperOut:
     @wraps(fn)
     def wrapper(
         self: Owner,
-        x_in: VariableLike,
+        x_in: FlatVarLike,
         *args: P.args,
-        **kwargs: P.kwargs
-    ) -> VariableLike:
-        _input_is_variable = isinstance(x_in, Variable)
-        if hasattr(self, "_input_is_variable"):
-            self._input_is_variable = _input_is_variable
-        x_var = x_in if _input_is_variable else Variable(x_in)
+        **kwargs: P.kwargs,
+    ) -> FlatVarLike:
+        input_is_wrapper = is_flat_var(x_in)
+        if hasattr(self, "_input_is_wrapper"):
+            self._input_is_wrapper = input_is_wrapper
+        x_var = as_flat_var(x_in)
         x_out = fn(self, x_var, *args, **kwargs)
-        return x_out if _input_is_variable else x_out.data
+        return x_out if input_is_wrapper else x_out.data
+
+    return wrapper
+
+
+def ensure_pair_input(fn: PairWrapperIn) -> PairWrapperOut:
+    @wraps(fn)
+    def wrapper(
+        self: Owner,
+        x_in: PairVarLike,
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> PairVarLike:
+        input_is_wrapper = is_pair_var(x_in)
+        if hasattr(self, "_input_is_wrapper"):
+            self._input_is_wrapper = input_is_wrapper
+        x_var = as_pair_var(x_in)
+        x_out = fn(self, x_var, *args, **kwargs)
+        return x_out if input_is_wrapper else x_out.data
+
     return wrapper

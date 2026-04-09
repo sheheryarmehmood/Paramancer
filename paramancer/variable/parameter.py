@@ -1,13 +1,15 @@
 from __future__ import annotations
-import torch
 
+from ._mixins import FlattenMixin, TensorOpsMixin
 from .util import platten, unplatten
 from .types import (
     IndexMapType, ParameterType
 )
 
-# TODO: Consider chaning the name of this class (`ParameterBundle`) to something else which also demonstrates its usage in the lower level optimization problem. Maybe `OuterOptVar`, `OuterVariable`, `OuterVar` or something like that. The reason is that the name `ParameterBundle` is very generic and can be easily cause confusion. This will also require changing the name of `ParameterLike` and `ParameterType` to something else. Also, the name of the file `parameter.py` can also be changed to something else like `outer.py` or something like that.
-class ParameterBundle:
+class ParameterBundle(TensorOpsMixin, FlattenMixin):
+    _flatten_fn = staticmethod(platten)
+    _unflatten_fn = staticmethod(unplatten)
+
     def __init__(
         self,
         data: ParameterType,
@@ -19,12 +21,6 @@ class ParameterBundle:
             self._indices.setdefault("grad", "all")
             self._indices.setdefault("lin_op", "all")
     
-    def zeros_like(self):
-        flat, spec = platten(self.data)
-        zero_flat = tuple(torch.zeros_like(u) for u in flat)
-        zero = unplatten(zero_flat, spec)
-        return ParameterBundle(zero, self.indices)
-
     @property
     def data(self) -> ParameterType:
         return self._data
@@ -78,3 +74,14 @@ class ParameterBundle:
     @property
     def dual(self) -> ParameterType:
         return self.select("dual")
+
+    def _map_tensors(self, fn):
+        flat, spec = self.flatten()
+        return unplatten(tuple(fn(u) for u in flat), spec)
+
+    def _iter_tensors(self):
+        flat, _ = self.flatten()
+        return iter(flat)
+
+    def _new_like(self, data):
+        return type(self)(data, self.indices.copy())

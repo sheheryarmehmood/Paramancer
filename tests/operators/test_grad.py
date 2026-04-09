@@ -4,7 +4,7 @@ import pytest
 
 from paramancer.operators.grad import _gradient, gradient
 from paramancer.operators.norms import l2_sq
-from paramancer.variable import Variable
+from paramancer.variable import FlatVar
 from paramancer.operators.norms import inner_product, l2_sq
 from paramancer.variable.types import (
     OptVarType, ParameterType, ScalarLike
@@ -13,7 +13,7 @@ from paramancer.variable.types import (
 
 def test_gradient():
     def smooth(x, u, a1, a2): # a1 and a2 can be non-tensors
-        x_data = x.data if isinstance(x, Variable) else x
+        x_data = x.data if isinstance(x, FlatVar) else x
         x1, x2 = x_data
         u1, u2 = u
         return 0.5 * a1 * u2.sum() * l2_sq(x1) + a2 * inner_product(x2, u1)
@@ -33,10 +33,10 @@ def test_gradient():
     assert torch.allclose(gd[0], a1 * u2.sum() * x1)
     assert torch.allclose(gd[1], a2 * u1)
     
-    x_var = Variable(x)
+    x_var = FlatVar(x)
     gd_var = grad_fn(x_var, u, a1, a2)
     
-    assert isinstance(gd_var, Variable)
+    assert isinstance(gd_var, FlatVar)
     assert torch.allclose(gd_var.data[0], a1 * u2.sum() * x1)
     assert torch.allclose(gd_var.data[1], a2 * u1)
     
@@ -97,7 +97,7 @@ def test_gradient_differentiability_with_params_args_kwargs():
         return b * x1.sum() + 0.5 * c * (x2 ** 2).sum() + inner_product(a, x3)
     
     def smooth_var(
-        x: Variable, u: ParameterType, c: ScalarLike = 4
+        x: FlatVar, u: ParameterType, c: ScalarLike = 4
     ) -> torch.Tensor:
         x1, x2, x3 = x.data
         a, b = tuple(u)
@@ -142,7 +142,7 @@ def test_gradient_differentiability_with_params_args_kwargs():
     a_bvar = torch.nn.Parameter(a)
     u_var = torch.nn.ParameterList((a, b))
     x_bvar = tuple(xk.clone().requires_grad_(True) for xk in (x1, x2, x3))
-    x_var = Variable(
+    x_var = FlatVar(
         tuple(xk.clone().requires_grad_(True) for xk in (x1, x2, x3))
     )
     

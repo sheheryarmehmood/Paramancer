@@ -3,11 +3,10 @@ from typing import Callable, Union, Tuple
 
 
 from ..optim.step import OptimizerStep
-from ..optim.optimizer import Optimizer
+from ..optim.optimizer import Optimizer as BaseOptimizer
 from .implicit import ImplicitDifferentiation
 from .step import GDParamMarkovStep
-from ..variable import Variable
-from ..variable.types import VariableType
+from ..variable.types import AlgoVarLike
 
 
 class OptimizerID(torch.autograd.Function):
@@ -15,18 +14,34 @@ class OptimizerID(torch.autograd.Function):
     def forward(ctx, *args) -> torch.Tensor:
         num_u, num_x = args[-2:]
         u_given, x_init = args[:num_u], args[num_u:num_u + num_x]
-        param_step, metric, tol_fwd, _, iters_fwd = args[num_u+1:-3]
-        tol_bwd = tol_fwd if args[-4] is None else args[-5]
-        iters_bwd = iters_fwd if args[-2] is None else args[-3]
+        if len(u_given) == 1:
+            u_given = u_given[0]
+        if len(x_init) == 1:
+            x_init = x_init[0]
+        (
+            param_step,
+            metric,
+            tol_fwd,
+            tol_bwd,
+            iters_fwd,
+            iters_bwd,
+        ) = args[num_u + num_x : -2]
+        tol_bwd = tol_fwd if tol_bwd is None else tol_bwd
+        iters_bwd = iters_fwd if iters_bwd is None else iters_bwd
         param_step.u_given = u_given
         optimizer = Optimizer(param_step, tol_fwd, iters_fwd, metric=metric)
+        if not param_step.is_markovian():
+            x_init = (x_init, x_init)
         xmin = optimizer(x_init)
-        if torch.is_tensor(u_given): u_given = u_given,
-        ctx.save_for_backward(xmin, *u_given)
+        xmin_sol = xmin[0] if not param_step.is_markovian() else xmin
+        if torch.is_tensor(u_given):
+            u_given = (u_given,)
+        ctx.save_for_backward(xmin_sol, *u_given)
         ctx.param_step = param_step
         ctx.tol_bwd = tol_bwd
         ctx.iters_bwd = iters_bwd
-        return xmin
+        ctx.num_total_args = len(args)
+        return xmin_sol
         
     
     @staticmethod
@@ -40,11 +55,12 @@ class OptimizerID(torch.autograd.Function):
             metric="default"
         )
         u_grad = imp_diff(xmin, u_given, xmin_grad)
-        if len(u_grad) == 1: u_grad = u_grad,
-        return *u_grad, *((None,) * 8)
+        if len(u_grad) == 1:
+            u_grad = (u_grad,)
+        return *u_grad, *((None,) * (ctx.num_total_args - len(u_grad)))
 
 
-class Optimizer:
+class Optimizer(BaseOptimizer):
     def __init__(
         self,
         step: OptimizerStep,
@@ -52,15 +68,12 @@ class Optimizer:
         iters: int=100,
         metric: Union[None, Callable]=None
     ):
-        self.step = step
-        self.tol = tol
-        self.iters = iters
-        self.metric = metric
+        super().__init__(step, tol=tol, iters=iters, metric=metric)
     
     def __call__(
-        self, x_init: Union[Variable, VariableType], iters: None | int=None
-    ) -> Union[Variable, VariableType]:
-        return self.run(x_init, iters)
+        self, x_init: AlgoVarLike, iters: None | int=None
+    ) -> AlgoVarLike:
+        return self.run(x_init, iters=iters)
         
 
 

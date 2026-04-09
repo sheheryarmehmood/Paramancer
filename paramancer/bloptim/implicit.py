@@ -54,7 +54,7 @@ class ImplicitDifferentiation:
             vector = self._xmin_grad
         else:
             operator = self._operator_non_markovian
-            vector = self._xmin_grad, self._xmin_grad
+            vector = self._xmin_grad, torch.zeros_like(self._xmin_grad)
         self._adjoint_state = neumann_series(
             lin_op=operator, vector=vector, tol=self.tol, iters=self.iters, 
             metric=self.metric, verbose=self.verbose

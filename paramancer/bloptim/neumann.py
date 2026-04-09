@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from ..optim.optimizer import NeumannSeries
-from ..variable.types import VariableLike, MetricSpec, LinOpType
+from ..variable.types import FlatVarLike, LinOpType, MetricSpec
 
 
 def neumann_series(
     lin_op: LinOpType,
-    vector: VariableLike,
-    init: VariableLike | None = None,
+    vector: FlatVarLike,
+    init: FlatVarLike | None = None,
     tol: float = 1e-5,
     iters: int = 100,
     metric: MetricSpec = None,
@@ -17,4 +17,4 @@ def neumann_series(
     neumann = NeumannSeries(
         lin_op, vector, tol, iters, metric, store_history, verbose
     )
-    return neumann(init)
+    return neumann(init=init)

@@ -1,80 +1,82 @@
 from __future__ import annotations
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+from typing import Concatenate, Literal, ParamSpec, TypeAlias
 
 from torch import Tensor, nn
 
-from typing import TYPE_CHECKING
-from typing import Literal, TypeAlias, ParamSpec, Concatenate
-from collections.abc import Callable
-
 if TYPE_CHECKING:
-    from .inner import InnerVar
+    from .flat import FlatVar
+    from .pair import PairVar
     from .parameter import ParameterBundle
-    from ..optim.step import OptimizerStep
     from ..optim.optimizer import Optimizer
+    from ..optim.step import OptimizerStep
 
-# Scalar
+# Scalars
 ScalarLike: TypeAlias = float | Tensor
 
-# Types allowed for AlgoVar and OptVar construction
-TensorVar: TypeAlias = Tensor
-TupleVar: TypeAlias = tuple[TensorVar, ...]
-NestedVar: TypeAlias = tuple[TupleVar, TupleVar]
-FlatInnerVarType: TypeAlias = TensorVar | TupleVar
-InnerVarType: TypeAlias = FlatInnerVarType | NestedVar
-OptVarType: TypeAlias = FlatInnerVarType
-AlgoVarType: TypeAlias = InnerVarType
-BaseVariableType: TypeAlias = FlatInnerVarType # to be removed
-VariableType: TypeAlias = InnerVarType # to be removed
+# Raw optimization-state payloads
+TensorVarType: TypeAlias = Tensor
+TupleVarType: TypeAlias = tuple[TensorVarType, ...]
+FlatRawVarType: TypeAlias = TensorVarType | TupleVarType
+PairRawVarType: TypeAlias = tuple[FlatRawVarType, FlatRawVarType]
 
-FlatInnerVarLike: TypeAlias = "FlatInnerVarType | InnerVar"
-InnerVarLike: TypeAlias = "InnerVarType | InnerVar"
-OptVarLike: TypeAlias = FlatInnerVarLike
-AlgoVarLike: TypeAlias = InnerVarLike
-BaseVariableLike: TypeAlias = FlatInnerVarLike # to be removed
-VariableLike: TypeAlias = InnerVarLike # to be removed
+# Wrapper-aware aliases
+FlatVarLike: TypeAlias = "FlatRawVarType | FlatVar"
+PairVarLike: TypeAlias = "PairRawVarType | PairVar"
+AlgoVar: TypeAlias = "FlatVar | PairVar"
+AlgoVarLike: TypeAlias = "FlatVarLike | PairVarLike"
 
+OptVarType: TypeAlias = FlatRawVarType
+AlgoVarType: TypeAlias = FlatRawVarType | PairRawVarType
+OptVarLike: TypeAlias = FlatVarLike
 
-# Aliases for callables with various args and returns types
-OptVarToTen: TypeAlias = Callable[[OptVarType], Tensor]
-OptVarToOptVar: TypeAlias = Callable[[OptVarType], OptVarType]
+# Common callable aliases for flat optimization variables
+FlatRawVarToTen: TypeAlias = Callable[[FlatRawVarType], Tensor]
+FlatRawVarToFlatRawVar: TypeAlias = Callable[[FlatRawVarType], FlatRawVarType]
+PairRawVarToPairRawVar: TypeAlias = Callable[[PairRawVarType], PairRawVarType]
 VoidToScal: TypeAlias = Callable[[], ScalarLike]
-OptVarToScal: TypeAlias = Callable[[OptVarType], ScalarLike]
-OptVarXOptVarToScal: TypeAlias = Callable[[OptVarType, OptVarType], ScalarLike]
+FlatRawVarToScal: TypeAlias = Callable[[FlatRawVarType], ScalarLike]
+FlatRawVarXFlatRawVarToScal: TypeAlias = Callable[
+    [FlatRawVarType, FlatRawVarType], ScalarLike
+]
 
-# Common function types used across paramancer
-SmoothObjType: TypeAlias = OptVarToTen
-GradMapType: TypeAlias = OptVarToOptVar
-ProxMapType: TypeAlias = OptVarToOptVar
-LinOpType: TypeAlias = OptVarToOptVar
-MetricFnType: TypeAlias = OptVarToScal
+SmoothObjType: TypeAlias = FlatRawVarToTen
+GradMapType: TypeAlias = FlatRawVarToFlatRawVar
+ProxMapType: TypeAlias = FlatRawVarToFlatRawVar
+FlatLinOpType: TypeAlias = FlatRawVarToFlatRawVar
+PairLinOpType: TypeAlias = PairRawVarToPairRawVar
+LinOpType: TypeAlias = FlatLinOpType | PairLinOpType
+MetricFnType: TypeAlias = FlatRawVarToScal
 
 MomentumSchedType: TypeAlias = VoidToScal
-LineSearchSchedType: TypeAlias = OptVarXOptVarToScal
+LineSearchSchedType: TypeAlias = FlatRawVarXFlatRawVarToScal
 
 MetricSpec: TypeAlias = Literal["default"] | MetricFnType
 StepsizeSchedType: TypeAlias = MomentumSchedType | LineSearchSchedType
 
-
-# for flattened variable to be passed to `OptimizerID.apply`
+# Flattened raw variable payloads
 FlattendType: TypeAlias = tuple[Tensor, ...]
 TensorSpec: TypeAlias = tuple[Literal["tensor"]]
 TupleSpec: TypeAlias = tuple[Literal["tuple"], int]
-NestedSpec: TypeAlias = tuple[Literal["nested"], int, int]
-VSpecType: TypeAlias = TensorSpec | TupleSpec | NestedSpec
+PairSpec: TypeAlias = tuple[Literal["pair"], int, int]
+VSpecType: TypeAlias = TensorSpec | TupleSpec | PairSpec
 PSpecType: TypeAlias = TensorSpec | TupleSpec
 
-
-# Types allowed for Parameter
+# Parameters
+# The naming of parameters need to be worked out. Perhaps we can use `TensorParType`, `TupleParType`, `ParListType`, `RawParType` for the raw types. We can rename the wrapper `ParameterBundle` to `AlgoPar` or something else to be consistent with `AlgoVar`.
 FlatParameter = Tensor
 TupleParameter = tuple[Tensor, ...]
 ParameterList = nn.ParameterList
 ParameterType = FlatParameter | TupleParameter | ParameterList
+
 
 def is_parameter_type(param: object) -> bool:
     return isinstance(param, (FlatParameter, ParameterList)) or (
         isinstance(param, tuple)
         and all(isinstance(item, FlatParameter) for item in param)
     )
+
 
 IndexType: TypeAlias = Literal["all"] | int | tuple[int, ...]
 IndexMapType: TypeAlias = dict[str, IndexType]
@@ -83,32 +85,35 @@ ParameterLike: TypeAlias = "ParameterType | ParameterBundle"
 
 P = ParamSpec("P")
 
-# Aliases for callables with various args and returns types ----
-BVarXPrmXAnyToTen: TypeAlias = Callable[
-    Concatenate[OptVarLike, ParameterType, P], Tensor
+# Parametric callable aliases
+FlatVarXPrmXAnyToTen: TypeAlias = Callable[
+    Concatenate[FlatVarLike, ParameterType, P], Tensor
 ]
-BVarXPrmXAnyToBVar: TypeAlias = Callable[
-    Concatenate[OptVarLike, ParameterType, P], OptVarLike
+FlatVarXPrmXAnyToFlatVar: TypeAlias = Callable[
+    Concatenate[FlatVarLike, ParameterType, P], FlatVarLike
 ]
-BVarXAnyToTen: TypeAlias = Callable[
-    Concatenate[OptVarLike, P], Tensor
-]
-BVarXAnyToBVar: TypeAlias = Callable[
-    Concatenate[OptVarLike, P], OptVarLike
+FlatVarXAnyToTen: TypeAlias = Callable[Concatenate[FlatVarLike, P], Tensor]
+FlatVarXAnyToFlatVar: TypeAlias = Callable[
+    Concatenate[FlatVarLike, P], FlatVarLike
 ]
 
-# Aliases for various parametric maps
-ParamSmoothObjType: TypeAlias = BVarXPrmXAnyToTen
-ParamGradMapType: TypeAlias = BVarXPrmXAnyToBVar
-ParamProxMapType: TypeAlias = BVarXPrmXAnyToBVar
-# vvvvv Generic aliases (Param* aliases are stricter specializations of these)
-PSmoothObjType: TypeAlias = BVarXAnyToTen
-PGradMapType: TypeAlias = BVarXAnyToBVar
-PLinOpType: TypeAlias = BVarXAnyToBVar
+ParamSmoothObjType: TypeAlias = FlatVarXPrmXAnyToTen
+ParamGradMapType: TypeAlias = FlatVarXPrmXAnyToFlatVar
+ParamProxMapType: TypeAlias = FlatVarXPrmXAnyToFlatVar
+PSmoothObjType: TypeAlias = FlatVarXAnyToTen
+PGradMapType: TypeAlias = FlatVarXAnyToFlatVar
+PLinOpType: TypeAlias = FlatVarXAnyToFlatVar
 
-
-# Decorator type for ensuring Variable input to the `Optimizer` and 
-# `OptimizerStep` methods
+# Decorator types for optimizer/step wrapper normalization
 Owner: TypeAlias = "OptimizerStep | Optimizer"
-WrapperIn: TypeAlias = "Callable[Concatenate[Owner, InnerVar, P], InnerVar]"
-WrapperOut: TypeAlias = Callable[Concatenate[Owner, InnerVarLike, P], InnerVarLike]
+FlatWrapperIn: TypeAlias = "Callable[Concatenate[Owner, FlatVar, P], FlatVar]"
+FlatWrapperOut: TypeAlias = Callable[
+    Concatenate[Owner, FlatVarLike, P], FlatVarLike
+]
+PairWrapperIn: TypeAlias = "Callable[Concatenate[Owner, PairVar, P], PairVar]"
+PairWrapperOut: TypeAlias = Callable[
+    Concatenate[Owner, PairVarLike, P], PairVarLike
+]
+
+WrapperIn: TypeAlias = "Callable[Concatenate[Owner, AlgoVar, P], AlgoVar]"
+WrapperOut: TypeAlias = Callable[Concatenate[Owner, AlgoVarLike, P], AlgoVarLike]
