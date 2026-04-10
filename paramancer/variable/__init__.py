@@ -69,7 +69,6 @@ from .util import (
 )
 from .flat import FlatVar
 from .pair import PairVar
-from .inner import AlgoVar, Variable
 from .parameter import ParameterBundle
 
 __all__ = [
@@ -139,7 +138,5 @@ __all__ = [
     "zeros_like",
     "FlatVar",
     "PairVar",
-    "AlgoVar",
-    "Variable",
     "ParameterBundle",
 ]
