@@ -1,97 +1,91 @@
 import torch
-import torch.autograd.functional as agF
-from typing import Callable, Union, Tuple
 
-# from ..optim.variable import Variable, VariableType
-from ..bloptim.neumann import neumann_series
 from ..optim.step import OptimizerStep
+
+from ..optim.optimizer import NeumannSeries
+from ..variable.util import zeros_like
+from ..variable.flat import FlatVar
+from ..variable.parameter import AlgoParam
+from ..variable.types import (
+    LinOpType, MetricSpec, ParamMarkovStep, AlgoVar, AlgoVarLike
+)
+
+
+def neumann_series(
+    lin_op: LinOpType,
+    vector: AlgoVarLike,
+    init: AlgoVarLike | None = None,
+    tol: float = 1e-5,
+    iters: int = 100,
+    metric: MetricSpec | None = None,
+    store_history: bool = False,
+    verbose: bool = False
+):
+    neumann = NeumannSeries(
+        lin_op, vector, tol, iters, metric, store_history, verbose
+    )
+    return neumann(init=init)
 
 
 class ImplicitDifferentiation:
     def __init__(
         self,
-        algo_step: OptimizerStep,
-        tol: float=1e-5,
-        iters: int=100,
-        metric: Union[None, str, Callable]=None,
-        verbose: bool=False
+        param_step: ParamMarkovStep,
+        tol: float = 1e-5,
+        iters: int = 100,
+        metric: MetricSpec | None = None,
+        verbose: bool = False
     ):
-        self.step = algo_step
-        self._xmin = self._u_given = self._xmin_grad = None
+        self.step = param_step
         self._adjoint_state = None
         self.tol = tol
         self.iters = iters
         self.metric = metric
         self.verbose = verbose
     
-    def __call__(
+    def vjp(
         self,
-        xmin: torch.Tensor,
-        u_given: Union[torch.Tensor, Tuple[torch.Tensor]],
-        xmin_grad: torch.Tensor
-    ) -> Union[torch.Tensor, Tuple[torch.Tensor]]:
-        self.setup(xmin, u_given, xmin_grad)
-        self.solve_linear_system()
-        return self.compute_derivative_from_adjoint_state()
+        xmin: FlatVar,
+        u_given: AlgoParam,
+        xmin_grad: FlatVar,
+        init: AlgoVar | None = None
+    ) -> AlgoParam:
+        zmin = xmin if self.step.is_markovian() else (xmin, xmin)
+        zmin_grad = (
+            xmin_grad if self.step.is_markovian() 
+            else (xmin_grad, xmin_grad.zeros_like())
+        )
+        self._adjoint_state = neumann_series(
+            lambda v: self.step.vjp_var(zmin, u_given, v), zmin_grad,
+            init=init, tol=self.tol, iters=self.iters,
+            metric=self.metric, verbose=self.verbose
+        )
+        return self.step.vjp_par(zmin, u_given, self._adjoint_state)
     
+    def jvp(
+        self,
+        xmin: FlatVar,
+        u_given: AlgoParam,
+        u_tangent: AlgoParam,
+        init: AlgoVar | None = None
+    ) -> AlgoVar:
+        zmin = xmin if self.step.is_markovian() else (xmin, xmin)
+        jvp_par_tan = self.step.jvp_par(zmin, u_given, u_tangent)
+        self._zmin_tangent = neumann_series(
+            lambda v: self.step.jvp_var(zmin, u_given, v), jvp_par_tan,
+            init=init, tol=self.tol, iters=self.iters,
+            metric=self.metric, verbose=self.verbose
+        )
+        return self._zmin_tangent
+
     @property
     def adjoint_state(self):
         return self._adjoint_state
     
-    def setup(
-        self,
-        xmin: torch.Tensor,
-        u_given: Union[torch.Tensor, Tuple[torch.Tensor]],
-        xmin_grad: torch.Tensor
-    ):
-        self._xmin = xmin
-        self._u_given = u_given
-        self._xmin_grad = xmin_grad
+    @property
+    def zmin_tangent(self):
+        return self._zmin_tangent
     
-    def solve_linear_system(self):
-        if self.step.is_markovian():
-            operator = self._operator_markovian
-            vector = self._xmin_grad
-        else:
-            operator = self._operator_non_markovian
-            vector = self._xmin_grad, torch.zeros_like(self._xmin_grad)
-        self._adjoint_state = neumann_series(
-            lin_op=operator, vector=vector, tol=self.tol, iters=self.iters, 
-            metric=self.metric, verbose=self.verbose
-        )
     
-    def compute_derivative_from_adjoint_state(self):
-        # -> Union[torch.Tensor, Tuple[torch.Tensor]]
-        if self.step.is_markovian():
-            func = self._markovian_u
-        else:
-            func = self._non_markovian_u
-        return agF.vjp(
-            func, self._u_given, self.adjoint_state
-        )[1]
-    
-    def _operator_markovian(self, yc):
-        return agF.vjp(self._markovian_x, self._xmin, yc)[1]
-    
-    def _operator_non_markovian(self, yc, yp):
-        return agF.vjp(
-            self._non_markovian_x, (self._xmin, self._xmin), (yc, yp)
-        )[1]
-    
-    def _markovian_x(self, x_curr):
-        return self.step(x_curr, self._u_given)
-    
-    def _non_markovian_x(self, x_curr, x_prev):
-        self.step.x_prev = x_prev
-        return self.step(x_curr, self._u_given), x_curr
-    
-    def _markovian_u(self, *u_given):
-        if len(u_given) == 1:
-            u_given = u_given[0]
-        return self.step(self._xmin, u_given)
-    
-    def _non_markovian_u(self, *u_given):
-        self.step.x_prev = self._xmin
-        return self._markovian_u(*u_given), self._xmin
 
 

@@ -240,7 +240,7 @@ def test_implicit_differentiation_with_GD_step():
         tol=1e-4, iters=10000, metric="default"
     )
     xm_tan_neu = neumann_jvp()
-    # assert torch.allclose(xm_tan_anl, xm_tan_neu, atol=1e-4)
+    assert torch.allclose(xm_tan_anl, xm_tan_neu, atol=1e-4)
     
     neumann_vjp = NeumannSeries(
         lambda v: pm_step.vjp_var(xm, u, v), grad_xm, tol=1e-4, iters=10000,

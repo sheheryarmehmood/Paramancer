@@ -11,6 +11,13 @@ if TYPE_CHECKING:
     from .parameter import ParamBundle
     from ..optim.optimizer import Optimizer
     from ..optim.step import OptimizerStep
+    from ..bloptim.step import (
+        GDParamMarkovStep,
+        PolyakMarkovParamStep,
+        NesterovMarkovParamStep,
+        ProxGradMarkovParamStep,
+        FISTAParamMarkovStep
+    )
 
 # Scalars
 ScalarLike: TypeAlias = float | Tensor
@@ -69,6 +76,8 @@ TensorParamType: TypeAlias = Tensor
 TupleParamType: TypeAlias = tuple[Tensor, ...]
 ParamListType: TypeAlias = nn.ParameterList
 RawParamType: TypeAlias = TensorParamType | TupleParamType | ParamListType
+ParamBundleLike: TypeAlias = "RawParamType | ParamBundle"
+AlgoParamLike: TypeAlias = ParamBundleLike
 
 
 def is_parameter_type(param: object) -> bool:
@@ -80,8 +89,6 @@ def is_parameter_type(param: object) -> bool:
 
 IndexType: TypeAlias = Literal["all"] | int | tuple[int, ...]
 IndexMapType: TypeAlias = dict[str, IndexType]
-
-ParameterLike: TypeAlias = "RawParamType | ParamBundle"
 
 P = ParamSpec("P")
 
@@ -119,3 +126,9 @@ WrapperIn: TypeAlias = "Callable[Concatenate[Owner, AlgoVar, P], AlgoVar]"
 WrapperOut: TypeAlias = Callable[
     Concatenate[Owner, AlgoVarLike, P], AlgoVarLike
 ]
+
+# Parametric Markovian OptimizerStep aliases
+ParamMarkovStep: TypeAlias = (
+    "GDParamMarkovStep | PolyakMarkovParamStep | NesterovMarkovParamStep" |
+    "ProxGradMarkovParamStep | FISTAParamMarkovStep"
+)

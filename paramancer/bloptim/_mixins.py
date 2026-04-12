@@ -12,7 +12,7 @@ from ..variable.types import (
     FlattendType,
     IndexMapType,
     P,
-    ParameterLike,
+    ParamBundleLike,
     PSpecType,
     PairVarLike,
     ParamGradMapType,
@@ -37,7 +37,7 @@ from ..variable.util import (
 class ParamMarkovStepMixin:
     def __init__(
         self,
-        u_in: ParameterLike | None = None,
+        u_in: ParamBundleLike | None = None,
         indices: IndexMapType | None = None,
     ):
         self._is_input_parambundle = is_param_bundle(u_in)
@@ -48,7 +48,7 @@ class ParamMarkovStepMixin:
     def step(
         self,
         x_curr: AlgoVarLike,
-        u_in: ParameterLike | None = None,
+        u_in: ParamBundleLike | None = None,
         *args: P.args,
         **kwargs: P.kwargs,
     ):
@@ -77,20 +77,20 @@ class ParamMarkovStepMixin:
     def __call__(
         self,
         x_curr: AlgoVarLike,
-        u_given: ParameterLike | None = None,
+        u_given: ParamBundleLike | None = None,
         *args: P.args,
         **kwargs: P.kwargs,
     ):
         return self.step(x_curr, u_given, *args, **kwargs)
 
     @property
-    def u_given(self) -> ParameterLike:
+    def u_given(self) -> ParamBundleLike:
         if self._u_given is None:
             raise RuntimeError("Parameter accessed without setting u_given")
         return self._u_given if self._is_input_parambundle else self._u_given.data
 
     @u_given.setter
-    def u_given(self, u_in: ParameterLike | None):
+    def u_given(self, u_in: ParamBundleLike | None):
         if is_param_bundle(u_in):
             u_in = u_in.data
         if u_in is None or u_in is self._u_given.data:
@@ -115,9 +115,9 @@ class JVPMixin:
     def jvp(
         self,
         x_in: FlatVarLike,
-        u_in: ParameterLike,
+        u_in: ParamBundleLike,
         x_tan: FlatVarLike,
-        u_tan: ParameterLike,
+        u_tan: ParamBundleLike,
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> FlatVarLike:
@@ -138,7 +138,7 @@ class JVPMixin:
     def jvp_var(
         self,
         x_in: FlatVarLike,
-        u_in: ParameterLike,
+        u_in: ParamBundleLike,
         x_tan: FlatVarLike,
         *args: P.args,
         **kwargs: P.kwargs,
@@ -152,8 +152,8 @@ class JVPMixin:
     def jvp_par(
         self,
         x_in: FlatVarLike,
-        u_in: ParameterLike,
-        u_tan: ParameterLike,
+        u_in: ParamBundleLike,
+        u_tan: ParamBundleLike,
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> FlatVarLike:
@@ -168,11 +168,11 @@ class VJPMixin:
     def vjp(
         self,
         x_in: FlatVarLike,
-        u_in: ParameterLike,
+        u_in: ParamBundleLike,
         grad_out: FlatVarLike,
         *args: P.args,
         **kwargs: P.kwargs,
-    ) -> tuple[FlatVarLike, ParameterLike]:
+    ) -> tuple[FlatVarLike, ParamBundleLike]:
         x_is_var = is_flat_var(x_in)
         u_is_par = is_param_bundle(u_in)
         x_flat, x_spec = flatten_flat_raw(x_in.data if x_is_var else x_in)
@@ -191,7 +191,7 @@ class VJPMixin:
     def vjp_var(
         self,
         x_in: FlatVarLike,
-        u_in: ParameterLike,
+        u_in: ParamBundleLike,
         grad_out: FlatVarLike,
         *args: P.args,
         **kwargs: P.kwargs,
@@ -201,11 +201,11 @@ class VJPMixin:
     def vjp_par(
         self,
         x_in: FlatVarLike,
-        u_in: ParameterLike,
+        u_in: ParamBundleLike,
         grad_out: FlatVarLike,
         *args: P.args,
         **kwargs: P.kwargs,
-    ) -> ParameterLike:
+    ) -> ParamBundleLike:
         return self.vjp(x_in, u_in, grad_out, *args, **kwargs)[1]
 
 

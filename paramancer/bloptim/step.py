@@ -8,7 +8,7 @@ from ..optim.step import (
     ProxGradStep, FISTAStep
 )
 from ..variable.types import (
-    IndexMapType, ScalarLike, ParameterLike,
+    IndexMapType, ScalarLike, ParamBundleLike,
     ParamSmoothObjType, ParamGradMapType, ParamProxMapType,
     MomentumSchedType, StepsizeSchedType
 )
@@ -38,7 +38,7 @@ class GDParamMarkovStep(
         stepsize: ScalarLike,
         grad_map_prm: ParamGradMapType | None = None,
         smooth_obj_prm: ParamSmoothObjType | None = None,
-        u_in: ParameterLike | None = None,
+        u_in: ParamBundleLike | None = None,
         indices: IndexMapType | None = None,
         stepsize_scheduler: StepsizeSchedType | None = None,
         linesearch: bool = True,
@@ -61,7 +61,7 @@ class PolyakParamMarkovStep(
         momentum: ScalarLike,
         grad_map_prm: ParamGradMapType | None = None,
         smooth_obj_prm: ParamSmoothObjType | None = None,
-        u_in: ParameterLike | None = None,
+        u_in: ParamBundleLike | None = None,
         indices: IndexMapType | None = None,
         tracking: bool = False
     ):
@@ -81,7 +81,7 @@ class NesterovParamMarkovStep(
         stepsize: ScalarLike,
         grad_map_prm: ParamGradMapType | None = None,
         smooth_obj_prm: ParamSmoothObjType | None = None,
-        u_in: ParameterLike | None = None,
+        u_in: ParamBundleLike | None = None,
         indices: IndexMapType | None = None,
         momentum_scheduler: MomentumSchedType | None = None,
         tracking: bool = False
@@ -104,7 +104,7 @@ class ProxGradParamMarkovStep(
         prox_map_prm: ParamProxMapType,
         grad_map_prm: ParamGradMapType | None = None,
         smooth_obj_prm: ParamSmoothObjType | None = None,
-        u_in: ParameterLike | None = None,
+        u_in: ParamBundleLike | None = None,
         indices: IndexMapType | None = None,
         tracking: bool = False
     ):
@@ -126,7 +126,7 @@ class FISTAParamMarkovStep(
         prox_map_prm: ParamProxMapType,
         grad_map_prm: ParamGradMapType | None = None,
         smooth_obj_prm: ParamSmoothObjType | None = None,
-        u_in: ParameterLike | None = None,
+        u_in: ParamBundleLike | None = None,
         indices: IndexMapType | None = None,
         momentum_scheduler: MomentumSchedType | None = None,
         tracking: bool = False

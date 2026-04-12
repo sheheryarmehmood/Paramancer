@@ -12,7 +12,7 @@ from .types import (
     PairRawVarType,
     PairSpec,
     PairVarLike,
-    ParameterLike,
+    ParamBundleLike,
     RawParamType,
     VSpecType,
 )
@@ -218,7 +218,7 @@ def map_wrapper(v, method_name: str, raw_fn, *args, **kwargs):
     return raw_fn(v, *args, **kwargs)
 
 
-def zeros_like(v: PairVarLike | ParameterLike | FlatRawVarType):
+def zeros_like(v: PairVarLike | ParamBundleLike | FlatRawVarType):
     return map_wrapper(v, "zeros_like", zeros_like_raw)
 
 
@@ -236,7 +236,7 @@ def clone_raw(v: FlatRawVarType | RawParamType | PairRawVarType):
     return map_raw(v, clone_flat_raw, clone_pair_raw)
 
 
-def clone(v: PairVarLike | ParameterLike | FlatRawVarType):
+def clone(v: PairVarLike | ParamBundleLike | FlatRawVarType):
     return map_wrapper(v, "clone", clone_raw)
 
 
@@ -267,7 +267,7 @@ def requires_grad_raw_(
 
 
 def requires_grad_(
-    v: PairVarLike | ParameterLike | FlatRawVarType, requires_grad: bool
+    v: PairVarLike | ParamBundleLike | FlatRawVarType, requires_grad: bool
 ):
     return map_wrapper(
         v,
