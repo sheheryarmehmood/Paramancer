@@ -28,7 +28,7 @@ from ..variable.types import (
     PSmoothObjType,
     ScalarLike,
 )
-from ..variable.util import is_pair_raw_var, zeros_like
+from ..variable.util import is_pair_raw_var, zeros_like_raw
 from ..variable.util import as_pair_var, is_flat_var, is_pair_var
 
 
@@ -134,7 +134,7 @@ class NeumannSeries(Optimizer):
         **kwargs: Any,
     ) -> AlgoVarLike:
         if init is None:
-            init = zeros_like(self.step.vector.data)
+            init = zeros_like_raw(self.step.vector.data)
         return self.run(init, *args, iters=iters, **kwargs)
 
 

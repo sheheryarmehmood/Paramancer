@@ -8,12 +8,12 @@ from ..variable.flat import FlatVar
 from ..variable.types import (
     FlatRawVarType,
     FlatVarLike,
-    ParameterList,
     PGradMapType,
     PSmoothObjType,
+    ParamListType,
     is_parameter_type,
 )
-from ..variable.util import is_flat_var, unvlatten, vlatten
+from ..variable.util import flatten_flat_raw, is_flat_var, unflatten_flat_raw
 
 
 def _set_req_grad(vars: tuple[torch.Tensor, ...], rgs: bool | tuple[bool, ...]):
@@ -29,12 +29,12 @@ def gradient(smooth: PSmoothObjType) -> PGradMapType:
         x_was_var = is_flat_var(x)
         x_data = x.data if x_was_var else x
 
-        x_flat, x_spec = vlatten(x_data)
+        x_flat, x_spec = flatten_flat_raw(x_data)
 
         u_flat: tuple[torch.Tensor, ...] = ()
         if len(args) > 0 and is_parameter_type(args[0]):
             u_flat = (
-                tuple(args[0]) if isinstance(args[0], (ParameterList, tuple)) else (args[0],)
+                tuple(args[0]) if isinstance(args[0], (ParamListType, tuple)) else (args[0],)
             )
 
         rgs = tuple(x_f.requires_grad for x_f in x_flat)
@@ -45,7 +45,7 @@ def gradient(smooth: PSmoothObjType) -> PGradMapType:
         )
 
         with torch.enable_grad():
-            x_unflat = unvlatten(x_flat, x_spec)
+            x_unflat = unflatten_flat_raw(x_flat, x_spec)
             x_in = FlatVar(x_unflat) if x_was_var else x_unflat
             out = smooth(x_in, *args, **kwargs).sum()
 
@@ -59,7 +59,7 @@ def gradient(smooth: PSmoothObjType) -> PGradMapType:
 
         _set_req_grad(x_flat, rgs)
 
-        out_grad = unvlatten(gd, x_spec)
+        out_grad = unflatten_flat_raw(gd, x_spec)
         return FlatVar(out_grad) if x_was_var else out_grad
 
     return grad_s

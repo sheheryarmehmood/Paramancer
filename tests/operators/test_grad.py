@@ -7,7 +7,7 @@ from paramancer.operators.norms import l2_sq
 from paramancer.variable import FlatVar
 from paramancer.operators.norms import inner_product, l2_sq
 from paramancer.variable.types import (
-    OptVarType, ParameterType, ScalarLike
+    OptVarType, RawParamType, ScalarLike
 )
 
 
@@ -97,7 +97,7 @@ def test_gradient_differentiability_with_params_args_kwargs():
         return b * x1.sum() + 0.5 * c * (x2 ** 2).sum() + inner_product(a, x3)
     
     def smooth_var(
-        x: FlatVar, u: ParameterType, c: ScalarLike = 4
+        x: FlatVar, u: RawParamType, c: ScalarLike = 4
     ) -> torch.Tensor:
         x1, x2, x3 = x.data
         a, b = tuple(u)

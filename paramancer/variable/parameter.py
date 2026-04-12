@@ -1,18 +1,13 @@
 from __future__ import annotations
 
 from ._mixins import FlattenMixin, TensorOpsMixin
-from .util import platten, unplatten
-from .types import (
-    IndexMapType, ParameterType
-)
+from .types import IndexMapType, RawParamType
 
-class ParameterBundle(TensorOpsMixin, FlattenMixin):
-    _flatten_fn = staticmethod(platten)
-    _unflatten_fn = staticmethod(unplatten)
 
+class ParamBundle(TensorOpsMixin, FlattenMixin):
     def __init__(
         self,
-        data: ParameterType,
+        data: RawParamType,
         indices: IndexMapType | None = None,
     ) -> None:
         self._data = data
@@ -20,34 +15,33 @@ class ParameterBundle(TensorOpsMixin, FlattenMixin):
         if not self._indices:
             self._indices.setdefault("grad", "all")
             self._indices.setdefault("lin_op", "all")
-    
+
     @property
-    def data(self) -> ParameterType:
+    def data(self) -> RawParamType:
         return self._data
 
     @property
     def indices(self) -> IndexMapType:
         return self._indices
-    
+
     @data.setter
-    def data(self, new_data: ParameterType):
+    def data(self, new_data: RawParamType):
         self._data = new_data
-    
+
     def takes_params(self, key: str) -> bool:
-        return key in self._indices and ( # No key -> no params.
-            bool(self._indices[key]) or # Empty index -> no params.
-            self._indices[key] == 0 # Index 0 is falsy but valid. 
+        return key in self._indices and (
+            bool(self._indices[key]) or self._indices[key] == 0
         )
 
     def select(
         self,
         key: str,
-    ) -> ParameterType:
+    ) -> RawParamType:
         if not self.takes_params(key):
             return ()
 
         idx = self._indices[key]
-        if idx == "all":        # Only way to access a `FlatParameter` `_data`.
+        if idx == "all":
             return self._data
 
         if isinstance(idx, int):
@@ -56,28 +50,28 @@ class ParameterBundle(TensorOpsMixin, FlattenMixin):
         return tuple(self._data[i] for i in idx)
 
     @property
-    def grad(self) -> ParameterType:
+    def grad(self) -> RawParamType:
         return self.select("grad")
 
     @property
-    def prox(self) -> ParameterType:
+    def prox(self) -> RawParamType:
         return self.select("prox")
-    
+
     @property
-    def lin_op(self) -> ParameterType:
+    def lin_op(self) -> RawParamType:
         return self.select("lin_op")
 
     @property
-    def primal(self) -> ParameterType:
+    def primal(self) -> RawParamType:
         return self.select("primal")
-    
+
     @property
-    def dual(self) -> ParameterType:
+    def dual(self) -> RawParamType:
         return self.select("dual")
 
     def _map_tensors(self, fn):
         flat, spec = self.flatten()
-        return unplatten(tuple(fn(u) for u in flat), spec)
+        return self._unflatten_fn(tuple(fn(u) for u in flat), spec)
 
     def _iter_tensors(self):
         flat, _ = self.flatten()
@@ -85,3 +79,6 @@ class ParameterBundle(TensorOpsMixin, FlattenMixin):
 
     def _new_like(self, data):
         return type(self)(data, self.indices.copy())
+
+
+AlgoParam = ParamBundle

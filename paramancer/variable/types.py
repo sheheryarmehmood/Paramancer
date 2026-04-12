@@ -8,7 +8,7 @@ from torch import Tensor, nn
 if TYPE_CHECKING:
     from .flat import FlatVar
     from .pair import PairVar
-    from .parameter import ParameterBundle
+    from .parameter import ParamBundle
     from ..optim.optimizer import Optimizer
     from ..optim.step import OptimizerStep
 
@@ -60,37 +60,37 @@ FlattendType: TypeAlias = tuple[Tensor, ...]
 TensorSpec: TypeAlias = tuple[Literal["tensor"]]
 TupleSpec: TypeAlias = tuple[Literal["tuple"], int]
 PairSpec: TypeAlias = tuple[Literal["pair"], int, int]
-VSpecType: TypeAlias = TensorSpec | TupleSpec | PairSpec
-PSpecType: TypeAlias = TensorSpec | TupleSpec
+FlatSpecType: TypeAlias = TensorSpec | TupleSpec
+VSpecType: TypeAlias = FlatSpecType | PairSpec
+PSpecType: TypeAlias = FlatSpecType
 
 # Parameters
-# The naming of parameters need to be worked out. Perhaps we can use `TensorParType`, `TupleParType`, `ParListType`, `RawParType` for the raw types. We can rename the wrapper `ParameterBundle` to `AlgoPar` or something else to be consistent with `AlgoVar`.
-FlatParameter = Tensor
-TupleParameter = tuple[Tensor, ...]
-ParameterList = nn.ParameterList
-ParameterType = FlatParameter | TupleParameter | ParameterList
+TensorParamType: TypeAlias = Tensor
+TupleParamType: TypeAlias = tuple[Tensor, ...]
+ParamListType: TypeAlias = nn.ParameterList
+RawParamType: TypeAlias = TensorParamType | TupleParamType | ParamListType
 
 
 def is_parameter_type(param: object) -> bool:
-    return isinstance(param, (FlatParameter, ParameterList)) or (
+    return isinstance(param, (TensorParamType, ParamListType)) or (
         isinstance(param, tuple)
-        and all(isinstance(item, FlatParameter) for item in param)
+        and all(isinstance(item, TensorParamType) for item in param)
     )
 
 
 IndexType: TypeAlias = Literal["all"] | int | tuple[int, ...]
 IndexMapType: TypeAlias = dict[str, IndexType]
 
-ParameterLike: TypeAlias = "ParameterType | ParameterBundle"
+ParameterLike: TypeAlias = "RawParamType | ParamBundle"
 
 P = ParamSpec("P")
 
 # Parametric callable aliases
 FlatVarXPrmXAnyToTen: TypeAlias = Callable[
-    Concatenate[FlatVarLike, ParameterType, P], Tensor
+    Concatenate[FlatVarLike, RawParamType, P], Tensor
 ]
 FlatVarXPrmXAnyToFlatVar: TypeAlias = Callable[
-    Concatenate[FlatVarLike, ParameterType, P], FlatVarLike
+    Concatenate[FlatVarLike, RawParamType, P], FlatVarLike
 ]
 FlatVarXAnyToTen: TypeAlias = Callable[Concatenate[FlatVarLike, P], Tensor]
 FlatVarXAnyToFlatVar: TypeAlias = Callable[
@@ -116,4 +116,6 @@ PairWrapperOut: TypeAlias = Callable[
 ]
 
 WrapperIn: TypeAlias = "Callable[Concatenate[Owner, AlgoVar, P], AlgoVar]"
-WrapperOut: TypeAlias = Callable[Concatenate[Owner, AlgoVarLike, P], AlgoVarLike]
+WrapperOut: TypeAlias = Callable[
+    Concatenate[Owner, AlgoVarLike, P], AlgoVarLike
+]

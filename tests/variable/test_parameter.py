@@ -2,7 +2,7 @@ import torch
 import pytest
 from torch import nn
 
-from paramancer.variable import ParameterBundle
+from paramancer.variable import ParamBundle
 from paramancer.operators.prox import l2_norm, l1_norm
 
 
@@ -32,15 +32,15 @@ def test_parameter():
     A, b = torch.rand(M, N), torch.randn(M)
     reg = torch.rand(1).squeeze()
     ss = torch.rand(1).squeeze()
-    param_l1_reg = ParameterBundle(
+    param_l1_reg = ParamBundle(
         nn.ParameterList((A.clone(), b.clone(), reg.clone())),
         {"grad": (0, 1), "prox": (2,)}
     )
-    param_l2_reg = ParameterBundle(
+    param_l2_reg = ParamBundle(
         nn.ParameterList((A.clone(), b.clone(), reg.clone())),
         {"grad": (0, 1), "prox": 2}
     )
-    param_l2_reg_scaled = ParameterBundle(
+    param_l2_reg_scaled = ParamBundle(
         nn.ParameterList((A.clone(), b.clone(), reg.clone(), ss.clone())),
         {"grad": (0, 1, 3), "prox": (2, 3)}
     )

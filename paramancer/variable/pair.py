@@ -3,10 +3,24 @@ from __future__ import annotations
 from ._mixins import FlattenMixin, TensorOpsMixin
 from .flat import FlatVar
 from .types import FlatVarLike
-from .util import as_flat_var, as_pair_var, is_pair_raw_var, is_pair_var
+from .util import (
+    as_flat_var,
+    as_pair_var,
+    clone_pair_raw,
+    flatten_pair_raw,
+    is_pair_raw_var,
+    is_pair_var,
+    unflatten_pair_raw,
+    zeros_like_pair_raw,
+)
 
 
 class PairVar(TensorOpsMixin, FlattenMixin):
+    _flatten_fn = staticmethod(flatten_pair_raw)
+    _unflatten_fn = staticmethod(unflatten_pair_raw)
+    _clone_raw_fn = staticmethod(clone_pair_raw)
+    _zero_like_raw_fn = staticmethod(zeros_like_pair_raw)
+
     def __init__(self, *args):
         if len(args) == 1:
             data = args[0]

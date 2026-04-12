@@ -5,7 +5,13 @@ from typing import Callable
 import torch
 
 from .types import ScalarLike
-from .util import is_flat_raw_var, is_pair_raw_var, is_tensor, unvlatten, vlatten
+from .util import (
+    clone_flat_raw,
+    flatten_flat_raw,
+    is_tensor,
+    unflatten_flat_raw,
+    zeros_like_flat_raw,
+)
 
 
 def to_tuple(data):
@@ -50,10 +56,10 @@ class TensorOpsMixin:
         raise NotImplementedError
 
     def clone(self):
-        return self._new_like(self._map_tensors(lambda x: x.clone()))
+        return self._new_like(self._clone_raw_fn(self.data))
 
     def zeros_like(self):
-        return self._new_like(self._map_tensors(torch.zeros_like))
+        return self._new_like(self._zero_like_raw_fn(self.data))
 
     def norm(self) -> torch.Tensor:
         norms = tuple(torch.norm(x) for x in self._iter_tensors())
@@ -64,10 +70,11 @@ class TensorOpsMixin:
             self._map_tensors(lambda x: x.requires_grad_(requires_grad))
         )
 
-# TODO: I think the flattening logic can be simplified by just flattening the `FlatVar` type objects here. We can use it to flatten both `FlatVar` and `ParameterBundle` objects. We can also reuse this logic to implement flattening for `PairVar`. Right now, I don't like the idea of two different flattening/unflattening methods namely `platten`/`unplatten` and `vlatten`/`unvlatten`. Maybe we can just have one set of flattening/unflattening functions that work for all variable types. This will also make it easier to implement new variable types in the future without having to worry about implementing separate flattening logic for each type.
 class FlattenMixin:
-    _flatten_fn = staticmethod(vlatten)
-    _unflatten_fn = staticmethod(unvlatten)
+    _flatten_fn = staticmethod(flatten_flat_raw)
+    _unflatten_fn = staticmethod(unflatten_flat_raw)
+    _clone_raw_fn = staticmethod(clone_flat_raw)
+    _zero_like_raw_fn = staticmethod(zeros_like_flat_raw)
 
     def flatten(self):
         return self._flatten_fn(self.data)

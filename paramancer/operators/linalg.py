@@ -5,7 +5,7 @@ import torch
 from ..variable.flat import FlatVar
 from ..variable.types import (
     FlatRawVarType,
-    ParameterList,
+    ParamListType,
     PLinOpType,
     is_parameter_type,
 )
@@ -34,7 +34,7 @@ def adjoint(lin_op: PLinOpType, zero_el: FlatRawVarType) -> PLinOpType:
         u_flat: tuple[torch.Tensor, ...] = ()
         if len(args) > 0 and is_parameter_type(args[0]):
             u_flat = (
-                tuple(args[0]) if isinstance(args[0], (ParameterList, tuple)) else (args[0],)
+                tuple(args[0]) if isinstance(args[0], (ParamListType, tuple)) else (args[0],)
             )
 
         y_data = y.data if is_flat_var(y) else y
