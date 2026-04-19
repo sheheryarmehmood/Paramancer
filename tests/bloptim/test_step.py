@@ -61,7 +61,7 @@ def test_fista_param_markov_step():
     z_curr = x_curr, x_prev
     u = u1, u2
     for _ in range(iters):
-        z_curr = pm_step1(z_curr, u)
+        z_curr = pm_step1.markov_step(z_curr, u)
     x1_new_pm, x2_new_pm = z_curr[0]
     
     assert torch.allclose(x1_new_pm, x1_new)
@@ -85,7 +85,7 @@ def test_fista_param_markov_step():
     z_curr = x_curr, x_prev
     u = u1, u2
     for _ in range(iters):
-        z_curr = pm_step2(z_curr, u)
+        z_curr = pm_step2.markov_step(z_curr, u)
     x1_new_pm, x2_new_pm = z_curr[0]
     
     assert torch.allclose(x1_new_pm, x1_new)
@@ -146,7 +146,7 @@ def test_gradient_descent_vjp():
     pm_step = GDParamMarkovStep(
         ss, grad_map_prm=grad_lr, u_in=(A, b)
     )
-    xkp_pm = pm_step(xk, u_pm)
+    xkp_pm = pm_step.markov_step(xk, u_pm)
     grad_x_pm, (grad_A_pm, grad_b_pm) = pm_step.vjp(xk, u_pm, grad_xkp)
     
     assert torch.allclose(grad_x, grad_x_pm)
@@ -183,10 +183,6 @@ def test_implicit_differentiation_with_polyak_step():
     pm_step = PolyakParamMarkovStep(ss, mm, grad_map_prm=grad_map, u_in=u)
     zm = (xm, xm)
     
-    pytest.xfail(
-        "Implicit differentiation for PolyakParamMarkovStep is not supported "
-        "yet; only the gradient-descent VJP path is currently working."
-    )
     neumann_jvp = NeumannSeries(
         lambda v: pm_step.jvp_var(zm, u, v),
         pm_step.jvp_par(zm, u, u_tan),

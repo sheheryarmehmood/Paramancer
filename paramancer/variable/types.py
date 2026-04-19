@@ -129,6 +129,6 @@ WrapperOut: TypeAlias = Callable[
 
 # Parametric Markovian OptimizerStep aliases
 ParamMarkovStep: TypeAlias = (
-    "GDParamMarkovStep | PolyakMarkovParamStep | NesterovMarkovParamStep" |
+    "GDParamMarkovStep | PolyakMarkovParamStep | NesterovMarkovParamStep | "
     "ProxGradMarkovParamStep | FISTAParamMarkovStep"
 )

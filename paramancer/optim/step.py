@@ -106,8 +106,9 @@ class MomentumStep(OptimizerStep):
             x_new = z_curr.first + x_new
         return PairVar(x_new, z_curr.first)
 
+    # TODO: This previously returned `False`. But now, the way it is defined, it should return `True`. We should verify that this change does not cause any issues.
     def is_markovian(self):
-        return False
+        return True
 
 
 class GDStep(OptimizerStep):

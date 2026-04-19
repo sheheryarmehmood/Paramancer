@@ -45,13 +45,13 @@ class ParamMarkovStepMixin:
             u_in, indices=indices
         )
 
-    def step(
+    def markov_step(
         self,
         x_curr: AlgoVarLike,
         u_in: ParamBundleLike | None = None,
         *args: P.args,
         **kwargs: P.kwargs,
-    ):
+    ) -> AlgoVarLike:
         input_is_wrapper = is_flat_var(x_curr) or is_pair_var(x_curr)
         if self.is_markovian():
             x_flat = as_flat_var(x_curr)
@@ -73,15 +73,6 @@ class ParamMarkovStepMixin:
         if not self.is_markovian() and pair_mode:
             x_new = PairVar(x_new, x_flat)
         return x_new if input_is_wrapper else x_new.data
-
-    def __call__(
-        self,
-        x_curr: AlgoVarLike,
-        u_given: ParamBundleLike | None = None,
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ):
-        return self.step(x_curr, u_given, *args, **kwargs)
 
     @property
     def u_given(self) -> ParamBundleLike:
@@ -128,7 +119,7 @@ class JVPMixin:
         u_flat, u_spec = flatten_flat_raw(u_in.data if u_is_par else u_in)
         x_tan_flat, _ = flatten_flat_raw(x_tan.data if x_is_var else x_tan)
         u_tan_flat, _ = flatten_flat_raw(u_tan_data)
-        step = flatten_inputs(self.step, x_spec, u_spec, *args, **kwargs)
+        step = flatten_inputs(self.markov_step, x_spec, u_spec, *args, **kwargs)
         _, out_tan_flat = torch.func.jvp(
             step, (*x_flat, *u_flat), (*x_tan_flat, *u_tan_flat)
         )
@@ -178,7 +169,7 @@ class VJPMixin:
         x_flat, x_spec = flatten_flat_raw(x_in.data if x_is_var else x_in)
         u_flat, u_spec = flatten_flat_raw(u_in.data if u_is_par else u_in)
         grad_out_flat, _ = flatten_flat_raw(grad_out.data if x_is_var else grad_out)
-        step = flatten_inputs(self.step, x_spec, u_spec, *args, **kwargs)
+        step = flatten_inputs(self.markov_step, x_spec, u_spec, *args, **kwargs)
         _, vjp = torch.func.vjp(step, *x_flat, *u_flat)
         grad_in_flat = vjp(grad_out_flat)
         grad_x = unflatten_flat_raw(grad_in_flat[: len(x_flat)], x_spec)
