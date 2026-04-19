@@ -1,17 +1,14 @@
-from .implicit import (
+from .diff import ImplicitDifferentiation, JVP, OptimizerID, VJP
+from .step import (
     FISTAMarkovParamStep,
     FISTAParamMarkovStep,
     GDParamMarkovStep,
-    ImplicitDifferentiation,
-    JVP,
     NesterovMarkovParamStep,
     NesterovParamMarkovStep,
-    OptimizerID,
     PolyakMarkovParamStep,
     PolyakParamMarkovStep,
     ProxGradMarkovParamStep,
     ProxGradParamMarkovStep,
-    VJP,
 )
 
 __all__ = [

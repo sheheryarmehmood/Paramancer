@@ -1,16 +1,28 @@
 from __future__ import annotations
 
 from ._mixins import (
-    ParamMarkovStepMixin, JVPMixin, VJPMixin, ParamGradMixin, ParamProxMixin
+    JVPMixin,
+    ParamGradMixin,
+    ParamMarkovStepMixin,
+    ParamProxMixin,
+    VJPMixin,
 )
-from ..optim.step import (
-    GDStep, PolyakStep, NesterovStep,
-    ProxGradStep, FISTAStep
+from ...optim.step import (
+    FISTAStep,
+    GDStep,
+    NesterovStep,
+    PolyakStep,
+    ProxGradStep,
 )
-from ..variable.types import (
-    IndexMapType, ScalarLike, ParamBundleLike,
-    ParamSmoothObjType, ParamGradMapType, ParamProxMapType,
-    MomentumSchedType, StepsizeSchedType
+from ...variable.types import (
+    IndexMapType,
+    MomentumSchedType,
+    ParamBundleLike,
+    ParamGradMapType,
+    ParamProxMapType,
+    ParamSmoothObjType,
+    ScalarLike,
+    StepsizeSchedType,
 )
 
 """
@@ -42,13 +54,17 @@ class GDParamMarkovStep(
         indices: IndexMapType | None = None,
         stepsize_scheduler: StepsizeSchedType | None = None,
         linesearch: bool = True,
-        tracking: bool = False
+        tracking: bool = False,
     ):
         ParamGradMixin.__init__(self, smooth_obj_prm, grad_map_prm)
         ParamMarkovStepMixin.__init__(self, u_in, indices)
         GDStep.__init__(
-            self, stepsize, grad_map=self._grad_map, linesearch=linesearch,
-            stepsize_scheduler=stepsize_scheduler, tracking=tracking
+            self,
+            stepsize,
+            grad_map=self._grad_map,
+            linesearch=linesearch,
+            stepsize_scheduler=stepsize_scheduler,
+            tracking=tracking,
         )
 
 
@@ -63,13 +79,16 @@ class PolyakParamMarkovStep(
         smooth_obj_prm: ParamSmoothObjType | None = None,
         u_in: ParamBundleLike | None = None,
         indices: IndexMapType | None = None,
-        tracking: bool = False
+        tracking: bool = False,
     ):
         ParamGradMixin.__init__(self, smooth_obj_prm, grad_map_prm)
         ParamMarkovStepMixin.__init__(self, u_in, indices)
         PolyakStep.__init__(
-            self, stepsize, momentum, grad_map=self._grad_map,
-            tracking=tracking
+            self,
+            stepsize,
+            momentum,
+            grad_map=self._grad_map,
+            tracking=tracking,
         )
 
 
@@ -84,19 +103,26 @@ class NesterovParamMarkovStep(
         u_in: ParamBundleLike | None = None,
         indices: IndexMapType | None = None,
         momentum_scheduler: MomentumSchedType | None = None,
-        tracking: bool = False
+        tracking: bool = False,
     ):
         ParamGradMixin.__init__(self, smooth_obj_prm, grad_map_prm)
         ParamMarkovStepMixin.__init__(self, u_in, indices)
         NesterovStep.__init__(
-            self, stepsize, grad_map=self._grad_map, tracking=tracking,
-            momentum_scheduler=momentum_scheduler
+            self,
+            stepsize,
+            grad_map=self._grad_map,
+            tracking=tracking,
+            momentum_scheduler=momentum_scheduler,
         )
 
 
 class ProxGradParamMarkovStep(
-    ParamProxMixin, ParamGradMixin, JVPMixin, VJPMixin, ParamMarkovStepMixin, 
-    ProxGradStep
+    ParamProxMixin,
+    ParamGradMixin,
+    JVPMixin,
+    VJPMixin,
+    ParamMarkovStepMixin,
+    ProxGradStep,
 ):
     def __init__(
         self,
@@ -106,19 +132,27 @@ class ProxGradParamMarkovStep(
         smooth_obj_prm: ParamSmoothObjType | None = None,
         u_in: ParamBundleLike | None = None,
         indices: IndexMapType | None = None,
-        tracking: bool = False
+        tracking: bool = False,
     ):
         ParamProxMixin.__init__(self, prox_map_prm)
         ParamGradMixin.__init__(self, smooth_obj_prm, grad_map_prm)
         ParamMarkovStepMixin.__init__(self, u_in, indices)
         ProxGradStep.__init__(
-            self, stepsize, self._prox_map, grad_map=self._grad_map,
-            tracking=tracking
+            self,
+            stepsize,
+            self._prox_map,
+            grad_map=self._grad_map,
+            tracking=tracking,
         )
 
+
 class FISTAParamMarkovStep(
-    ParamProxMixin, ParamGradMixin, JVPMixin, VJPMixin, ParamMarkovStepMixin,
-    FISTAStep
+    ParamProxMixin,
+    ParamGradMixin,
+    JVPMixin,
+    VJPMixin,
+    ParamMarkovStepMixin,
+    FISTAStep,
 ):
     def __init__(
         self,
@@ -129,14 +163,18 @@ class FISTAParamMarkovStep(
         u_in: ParamBundleLike | None = None,
         indices: IndexMapType | None = None,
         momentum_scheduler: MomentumSchedType | None = None,
-        tracking: bool = False
+        tracking: bool = False,
     ):
         ParamProxMixin.__init__(self, prox_map_prm)
         ParamGradMixin.__init__(self, smooth_obj_prm, grad_map_prm)
         ParamMarkovStepMixin.__init__(self, u_in, indices)
         FISTAStep.__init__(
-            self, stepsize, self._prox_map, grad_map=self._grad_map,
-            tracking=tracking, momentum_scheduler=momentum_scheduler
+            self,
+            stepsize,
+            self._prox_map,
+            grad_map=self._grad_map,
+            tracking=tracking,
+            momentum_scheduler=momentum_scheduler,
         )
 
 
@@ -146,4 +184,3 @@ PolyakMarkovParamStep = PolyakParamMarkovStep
 NesterovMarkovParamStep = NesterovParamMarkovStep
 ProxGradMarkovParamStep = ProxGradParamMarkovStep
 FISTAMarkovParamStep = FISTAParamMarkovStep
-

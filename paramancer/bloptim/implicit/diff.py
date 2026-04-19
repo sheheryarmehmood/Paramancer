@@ -4,22 +4,28 @@ from collections.abc import Callable
 
 import torch
 
-from ..optim.step import OptimizerStep
-
-from ..optim.optimizer import NeumannSeries, Optimizer
-from ..variable.util import zeros_like
-from ..variable.flat import FlatVar
-from ..variable.pair import PairVar
-from ..variable.parameter import AlgoParam
-from ..variable.types import (
-    FlattendType, LinOpType, MetricSpec, ParamMarkovStep, AlgoVar, AlgoVarLike,
-    VSpecType, PSpecType, IndexMapType
+from ...optim.optimizer import NeumannSeries, Optimizer
+from ...variable.flat import FlatVar
+from ...variable.pair import PairVar
+from ...variable.parameter import AlgoParam
+from ...variable.types import (
+    AlgoVar,
+    AlgoVarLike,
+    FlattendType,
+    IndexMapType,
+    LinOpType,
+    MetricSpec,
+    ParamMarkovStep,
+    PSpecType,
+    VSpecType,
 )
-from ..variable.util import unflatten_raw
+from ...variable.util import unflatten_raw
+
 
 def unflatten_var(z_flat: FlattendType, x_spec: VSpecType) -> AlgoVar:
     z_raw = unflatten_raw(z_flat, x_spec)
     return PairVar(z_raw) if x_spec[0] == "pair" else FlatVar(z_raw)
+
 
 def unflatten_param(
     u_flat: FlattendType, u_spec: PSpecType, indices: IndexMapType
@@ -27,16 +33,18 @@ def unflatten_param(
     u_raw = unflatten_raw(u_flat, u_spec)
     return AlgoParam(u_raw, indices)
 
+
 def extend_if_not_markovian(
     x: AlgoVar | None,
     fn: Callable[[FlatVar], FlatVar],
-    is_markovian: bool
+    is_markovian: bool,
 ) -> AlgoVar | None:
     return x if is_markovian or x is None else PairVar(x, fn(x))
 
+
 def project_if_not_markovian(
     x: AlgoVar,
-    is_markovian: bool
+    is_markovian: bool,
 ) -> AlgoVar:
     return x if is_markovian else x.first
 
@@ -49,7 +57,7 @@ def neumann_series(
     iters: int = 100,
     metric: MetricSpec | None = None,
     store_history: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
 ):
     neumann = NeumannSeries(
         lin_op, vector, tol, iters, metric, store_history, verbose
@@ -64,7 +72,7 @@ class VJP:
         tol: float = 1e-5,
         iters: int = 100,
         metric: MetricSpec | None = None,
-        verbose: bool = False
+        verbose: bool = False,
     ):
         self.step = param_step
         self._lin_sol = None
@@ -72,7 +80,7 @@ class VJP:
         self.iters = iters
         self.metric = metric
         self.verbose = verbose
-    
+
     def __call__(
         self,
         z_root: AlgoVar,
@@ -80,18 +88,23 @@ class VJP:
         z_grad: AlgoVar,
         init: AlgoVar = None,
         *args,
-        **kwargs
+        **kwargs,
     ) -> AlgoParam:
         self._lin_sol = neumann_series(
-            lambda v: self.step.vjp_var(z_root, u_given, v), z_grad,
-            init=init, tol=self.tol, iters=self.iters,
-            metric=self.metric, verbose=self.verbose
+            lambda v: self.step.vjp_var(z_root, u_given, v),
+            z_grad,
+            init=init,
+            tol=self.tol,
+            iters=self.iters,
+            metric=self.metric,
+            verbose=self.verbose,
         )
         return self.step.vjp_par(z_root, u_given, self._lin_sol)
-    
+
     @property
     def lin_sol(self):
         return self._lin_sol
+
 
 class JVP:
     def __init__(
@@ -100,7 +113,7 @@ class JVP:
         tol: float = 1e-5,
         iters: int = 100,
         metric: MetricSpec | None = None,
-        verbose: bool = False
+        verbose: bool = False,
     ):
         self.step = param_step
         self._lin_sol = None
@@ -108,7 +121,7 @@ class JVP:
         self.iters = iters
         self.metric = metric
         self.verbose = verbose
-    
+
     def __call__(
         self,
         z_root: AlgoVar,
@@ -116,19 +129,27 @@ class JVP:
         u_tan: AlgoParam,
         init: AlgoVar | None = None,
         *args,
-        **kwargs
+        **kwargs,
     ) -> AlgoVar:
         jvp_par_tan = self.step.jvp_par(z_root, u_given, u_tan)
         self._lin_sol = neumann_series(
-            lambda v: self.step.jvp_var(z_root, u_given, v), jvp_par_tan,
-            init=init, tol=self.tol, iters=self.iters,
-            metric=self.metric, verbose=self.verbose
+            lambda v: self.step.jvp_var(z_root, u_given, v),
+            jvp_par_tan,
+            init=init,
+            tol=self.tol,
+            iters=self.iters,
+            metric=self.metric,
+            verbose=self.verbose,
         )
         return self._lin_sol
-    
+
     @property
     def lin_sol(self):
         return self._lin_sol
+
+
+ImplicitDifferentiation = VJP
+
 
 def _flat_len(spec: PSpecType | VSpecType) -> int:
     if spec[0] == "tensor":
@@ -268,6 +289,3 @@ class OptimizerID(torch.autograd.Function):
             *z_init_grads,
             *z_adj_init_grads,
         )
-
-
-

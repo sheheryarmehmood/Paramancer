@@ -3,7 +3,7 @@ import torch.linalg as la
 import pytest
 from typing import TypeAlias
 
-from paramancer.bloptim.step import (
+from paramancer.bloptim.implicit.step import (
     FISTAParamMarkovStep, GDParamMarkovStep, PolyakParamMarkovStep
 )
 from paramancer.optim.step import FISTAStep

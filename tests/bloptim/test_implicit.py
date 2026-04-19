@@ -3,7 +3,7 @@ import torch.autograd.functional as agF
 import torch.linalg as la
 import pytest
 
-from paramancer.bloptim.step import (
+from paramancer.bloptim.implicit.step import (
     NesterovMarkovParamStep, ProxGradParamMarkovStep
 )
 from paramancer.bloptim.implicit import VJP, JVP

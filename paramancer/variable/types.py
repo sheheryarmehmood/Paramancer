@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from .parameter import ParamBundle
     from ..optim.optimizer import Optimizer
     from ..optim.step import OptimizerStep
-    from ..bloptim.step import (
+    from ..bloptim.implicit.step import (
         GDParamMarkovStep,
         PolyakMarkovParamStep,
         NesterovMarkovParamStep,

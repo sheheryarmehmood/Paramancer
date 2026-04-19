@@ -2,35 +2,35 @@ from __future__ import annotations
 
 import torch
 
-from ..operators.grad import gradient
-from ..variable import ParamBundle
-from ..variable.flat import FlatVar
-from ..variable.pair import PairVar
-from ..variable.types import (
+from ...operators.grad import gradient
+from ...variable import ParamBundle
+from ...variable.flat import FlatVar
+from ...variable.pair import PairVar
+from ...variable.types import (
     AlgoVarLike,
     FlatVarLike,
     FlattendType,
     IndexMapType,
     P,
     ParamBundleLike,
-    PSpecType,
-    PairVarLike,
     ParamGradMapType,
     ParamProxMapType,
     ParamSmoothObjType,
+    PSpecType,
+    PairVarLike,
     VSpecType,
 )
-from ..variable.util import (
+from ...variable.util import (
     as_flat_var,
     as_pair_var,
-    flatten_raw,
     flatten_flat_raw,
+    flatten_raw,
     is_flat_var,
-    is_param_bundle,
     is_pair_raw_var,
     is_pair_var,
-    unflatten_raw,
+    is_param_bundle,
     unflatten_flat_raw,
+    unflatten_raw,
 )
 
 
@@ -89,7 +89,13 @@ class ParamMarkovStepMixin:
         self._u_given.data = u_in
 
 
-def flatten_inputs(step, x_spec: VSpecType, u_spec: PSpecType, *args: P.args, **kwargs: P.kwargs):
+def flatten_inputs(
+    step,
+    x_spec: VSpecType,
+    u_spec: PSpecType,
+    *args: P.args,
+    **kwargs: P.kwargs,
+):
     num_x = sum(x_spec[1:]) if len(x_spec) > 1 else 1
 
     def step_flat(*vars_and_pars: torch.Tensor) -> FlattendType:
@@ -168,7 +174,9 @@ class VJPMixin:
         u_is_par = is_param_bundle(u_in)
         x_flat, x_spec = flatten_flat_raw(x_in.data if x_is_var else x_in)
         u_flat, u_spec = flatten_flat_raw(u_in.data if u_is_par else u_in)
-        grad_out_flat, _ = flatten_flat_raw(grad_out.data if x_is_var else grad_out)
+        grad_out_flat, _ = flatten_flat_raw(
+            grad_out.data if x_is_var else grad_out
+        )
         step = flatten_inputs(self.markov_step, x_spec, u_spec, *args, **kwargs)
         _, vjp = torch.func.vjp(step, *x_flat, *u_flat)
         grad_in_flat = vjp(grad_out_flat)
@@ -214,9 +222,18 @@ class ParamGradMixin:
                 "Either `grad_map_prm` should be supplied or `smooth_map_prm`,"
                 " but not both. One of them must be set to `None`."
             )
-        self.grad_map_prm = gradient(smooth_map_prm) if grad_map_prm is None else grad_map_prm
+        self.grad_map_prm = (
+            gradient(smooth_map_prm)
+            if grad_map_prm is None
+            else grad_map_prm
+        )
 
-    def _grad_map(self, x: FlatVarLike, *args: P.args, **kwargs: P.kwargs) -> FlatVarLike:
+    def _grad_map(
+        self,
+        x: FlatVarLike,
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> FlatVarLike:
         if not self._u_given.takes_params("grad"):
             return self.grad_map_prm(x, *args, **kwargs)
         return self.grad_map_prm(x, self._u_given.grad, *args, **kwargs)

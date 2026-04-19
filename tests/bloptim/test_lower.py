@@ -4,7 +4,10 @@ import torch.autograd.functional as agF
 import pytest
 
 from paramancer.bloptim.lower import OptimizerID
-from paramancer.bloptim.step import GDParamMarkovStep, PolyakMarkovParamStep
+from paramancer.bloptim.implicit.step import (
+    GDParamMarkovStep,
+    PolyakMarkovParamStep,
+)
 
 def test_gd_with_imp_diff():
     M, N = 10, 8
