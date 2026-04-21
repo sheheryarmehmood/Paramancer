@@ -2,17 +2,17 @@ from __future__ import annotations
 
 import torch
 
+from ...optim.step import MomentumType
 from ...operators.grad import gradient
 from ...variable import ParamBundle
 from ...variable.flat import FlatVar
 from ...variable.pair import PairVar
 from ...variable.types import (
-    AlgoVarLike,
+    IndexMapType,
+    AlgoVar,
     FlatVarLike,
     FlattendType,
-    IndexMapType,
     P,
-    ParamBundleLike,
     ParamGradMapType,
     ParamProxMapType,
     ParamSmoothObjType,
@@ -21,86 +21,60 @@ from ...variable.types import (
     VSpecType,
 )
 from ...variable.util import (
-    as_flat_var,
-    as_pair_var,
-    flatten_flat_raw,
     flatten_raw,
     is_flat_var,
-    is_pair_raw_var,
     is_pair_var,
-    is_param_bundle,
-    unflatten_flat_raw,
     unflatten_raw,
 )
-
 
 class ParamMarkovStepMixin:
     def __init__(
         self,
-        u_in: ParamBundleLike | None = None,
-        indices: IndexMapType | None = None,
+        u_in: ParamBundle | None = None,
     ):
-        self._is_input_parambundle = is_param_bundle(u_in)
-        self._u_given = u_in if self._is_input_parambundle else ParamBundle(
-            u_in, indices=indices
-        )
+        self._u_given = u_in
 
     def markov_step(
         self,
-        x_curr: AlgoVarLike,
-        u_in: ParamBundleLike | None = None,
+        z_curr: AlgoVar,
+        u_in: ParamBundle | None = None,
         *args: P.args,
         **kwargs: P.kwargs,
-    ) -> AlgoVarLike:
-        input_is_wrapper = is_flat_var(x_curr) or is_pair_var(x_curr)
-        if self.is_markovian():
-            x_flat = as_flat_var(x_curr)
-            pair_mode = False
-        else:
-            if is_pair_var(x_curr) or is_pair_raw_var(x_curr):
-                x_pair = as_pair_var(x_curr)
-                self.x_prev = x_pair.second
-                x_flat = x_pair.first
-                pair_mode = True
-            else:
-                x_flat = as_flat_var(x_curr)
-                pair_mode = False
-
-        self._input_is_wrapper = input_is_wrapper
+    ) -> AlgoVar:
         self.u_given = u_in
-        x_new = super().step(x_flat, *args, **kwargs)
-
-        if not self.is_markovian() and pair_mode:
-            x_new = PairVar(x_new, x_flat)
-        return x_new if input_is_wrapper else x_new.data
+        if self.is_markovian():
+            return self.step(z_curr, *args, **kwargs)
+        x_curr, self.x_prev = z_curr
+        x_new = self.step(x_curr, *args, **kwargs)
+        return PairVar(x_new, x_curr)
 
     @property
-    def u_given(self) -> ParamBundleLike:
+    def u_given(self) -> ParamBundle:
         if self._u_given is None:
             raise RuntimeError("Parameter accessed without setting u_given")
-        return self._u_given if self._is_input_parambundle else self._u_given.data
+        return self._u_given
 
     @u_given.setter
-    def u_given(self, u_in: ParamBundleLike | None):
-        if is_param_bundle(u_in):
-            u_in = u_in.data
-        if u_in is None or u_in is self._u_given.data:
+    def u_given(self, u_in: ParamBundle | None):
+        if u_in is None or u_in is self._u_given:
             return
-        self._u_given.data = u_in
+        self._u_given = u_in
 
 
 def flatten_inputs(
     step,
     x_spec: VSpecType,
     u_spec: PSpecType,
+    indices: IndexMapType,
     *args: P.args,
     **kwargs: P.kwargs,
 ):
     num_x = sum(x_spec[1:]) if len(x_spec) > 1 else 1
 
     def step_flat(*vars_and_pars: torch.Tensor) -> FlattendType:
-        x = unflatten_raw(vars_and_pars[:num_x], x_spec)
-        u = unflatten_flat_raw(vars_and_pars[num_x:], u_spec)
+        x_raw = unflatten_raw(vars_and_pars[:num_x], x_spec)
+        u = ParamBundle(unflatten_raw(vars_and_pars[num_x:], u_spec), indices)
+        x = PairVar(x_raw) if x_spec[0] == "pair" else FlatVar(x_raw)
         out = step(x, u, *args, **kwargs)
         out_raw = out.data if is_flat_var(out) or is_pair_var(out) else out
         return flatten_raw(out_raw)[0]
@@ -111,101 +85,103 @@ def flatten_inputs(
 class JVPMixin:
     def jvp(
         self,
-        x_in: FlatVarLike,
-        u_in: ParamBundleLike,
-        x_tan: FlatVarLike,
-        u_tan: ParamBundleLike,
+        z_in: AlgoVar,
+        u_in: ParamBundle,
+        z_tan: AlgoVar,
+        u_tan: ParamBundle,
         *args: P.args,
         **kwargs: P.kwargs,
-    ) -> FlatVarLike:
-        x_is_var = is_flat_var(x_in)
-        u_is_par = is_param_bundle(u_in)
-        u_tan_data = u_tan.data if is_param_bundle(u_tan) else u_tan
-        x_flat, x_spec = flatten_flat_raw(x_in.data if x_is_var else x_in)
-        u_flat, u_spec = flatten_flat_raw(u_in.data if u_is_par else u_in)
-        x_tan_flat, _ = flatten_flat_raw(x_tan.data if x_is_var else x_tan)
-        u_tan_flat, _ = flatten_flat_raw(u_tan_data)
-        step = flatten_inputs(self.markov_step, x_spec, u_spec, *args, **kwargs)
-        _, out_tan_flat = torch.func.jvp(
-            step, (*x_flat, *u_flat), (*x_tan_flat, *u_tan_flat)
+    ) -> AlgoVar:
+        z_flat, z_spec = z_in.flatten()
+        u_flat, u_spec = u_in.flatten()
+        z_tan_flat, _ = z_tan.flatten()
+        u_tan_flat, _ = u_tan.flatten()
+        step = flatten_inputs(
+            self.markov_step, z_spec, u_spec, u_in.indices, *args, **kwargs
         )
-        out_tan = unflatten_flat_raw(out_tan_flat, x_spec)
-        return FlatVar(out_tan) if x_is_var else out_tan
+        _, out_tan_flat = torch.func.jvp(
+            step, (*z_flat, *u_flat), (*z_tan_flat, *u_tan_flat)
+        )
+        Var = PairVar if z_spec[0] == "pair" else FlatVar
+        return Var.unflatten(out_tan_flat, z_spec)
+        # out_tan = unflatten_raw(out_tan_flat, z_spec)
+        # return PairVar(out_tan) if z_spec[0] == "pair" else FlatVar(out_tan)
 
     def jvp_var(
         self,
-        x_in: FlatVarLike,
-        u_in: ParamBundleLike,
-        x_tan: FlatVarLike,
+        z_in: AlgoVar,
+        u_in: ParamBundle,
+        z_tan: AlgoVar,
         *args: P.args,
         **kwargs: P.kwargs,
-    ) -> FlatVarLike:
-        u_is_par = is_param_bundle(u_in)
-        u_par = u_in if u_is_par else ParamBundle(u_in)
-        u_par_tan = u_par.zeros_like()
-        u_tan = u_par_tan if u_is_par else u_par_tan.data
-        return self.jvp(x_in, u_in, x_tan, u_tan, *args, **kwargs)
+    ) -> AlgoVar:
+        return self.jvp(
+            z_in, u_in, z_tan, u_in.zeros_like(), *args, **kwargs
+        )
 
     def jvp_par(
         self,
-        x_in: FlatVarLike,
-        u_in: ParamBundleLike,
-        u_tan: ParamBundleLike,
+        z_in: AlgoVar,
+        u_in: ParamBundle,
+        u_tan: ParamBundle,
         *args: P.args,
         **kwargs: P.kwargs,
-    ) -> FlatVarLike:
-        x_is_var = is_flat_var(x_in)
-        x_var = as_flat_var(x_in)
-        x_var_tan = x_var.zeros_like()
-        x_tan = x_var_tan if x_is_var else x_var_tan.data
-        return self.jvp(x_in, u_in, x_tan, u_tan, *args, **kwargs)
+    ) -> AlgoVar:
+        return self.jvp(
+            z_in, u_in, z_in.zeros_like(), u_tan, *args, **kwargs
+        )
 
 
 class VJPMixin:
     def vjp(
         self,
-        x_in: FlatVarLike,
-        u_in: ParamBundleLike,
-        grad_out: FlatVarLike,
+        z_in: AlgoVar,
+        u_in: ParamBundle,
+        grad_out: AlgoVar,
         *args: P.args,
         **kwargs: P.kwargs,
-    ) -> tuple[FlatVarLike, ParamBundleLike]:
-        x_is_var = is_flat_var(x_in)
-        u_is_par = is_param_bundle(u_in)
-        x_flat, x_spec = flatten_flat_raw(x_in.data if x_is_var else x_in)
-        u_flat, u_spec = flatten_flat_raw(u_in.data if u_is_par else u_in)
-        grad_out_flat, _ = flatten_flat_raw(
-            grad_out.data if x_is_var else grad_out
+    ) -> tuple[AlgoVar, ParamBundle]:
+        z_flat, x_spec = z_in.flatten()
+        u_flat, u_spec = u_in.flatten()
+        grad_out_flat, _ = grad_out.flatten()
+        step = flatten_inputs(
+            self.markov_step, x_spec, u_spec, u_in.indices, *args, **kwargs
         )
-        step = flatten_inputs(self.markov_step, x_spec, u_spec, *args, **kwargs)
-        _, vjp = torch.func.vjp(step, *x_flat, *u_flat)
+        _, vjp = torch.func.vjp(step, *z_flat, *u_flat)
         grad_in_flat = vjp(grad_out_flat)
-        grad_x = unflatten_flat_raw(grad_in_flat[: len(x_flat)], x_spec)
-        grad_u = unflatten_flat_raw(grad_in_flat[len(x_flat) :], u_spec)
-        return (
-            FlatVar(grad_x) if x_is_var else grad_x,
-            ParamBundle(grad_u, u_in.indices) if u_is_par else grad_u,
+        Var = PairVar if x_spec[0] == "pair" else FlatVar
+        grad_z = Var.unflatten(grad_in_flat[: len(z_flat)], x_spec)
+        grad_u = ParamBundle(
+            unflatten_raw(grad_in_flat[len(z_flat) :], u_spec), u_in.indices
         )
+        return grad_z, grad_u
+        # grad_z = unflatten_raw(grad_in_flat[: len(z_flat)], x_spec)
+        # grad_u = unflatten_raw(grad_in_flat[len(z_flat) :], u_spec)
+        # return (
+        #     PairVar(grad_z) if x_spec[0] == "pair" else FlatVar(grad_z),
+        #     ParamBundle(grad_u, u_in.indices),
+        # )
 
     def vjp_var(
         self,
-        x_in: FlatVarLike,
-        u_in: ParamBundleLike,
-        grad_out: FlatVarLike,
+        z_in: AlgoVar,
+        u_in: ParamBundle,
+        grad_out: AlgoVar,
         *args: P.args,
         **kwargs: P.kwargs,
-    ) -> FlatVarLike:
-        return self.vjp(x_in, u_in, grad_out, *args, **kwargs)[0]
+    ) -> AlgoVar:
+        return self.vjp(z_in, u_in, grad_out, *args, **kwargs)[0]
 
     def vjp_par(
         self,
-        x_in: FlatVarLike,
-        u_in: ParamBundleLike,
-        grad_out: FlatVarLike,
+        z_in: AlgoVar,
+        u_in: ParamBundle,
+        grad_out: AlgoVar,
         *args: P.args,
         **kwargs: P.kwargs,
-    ) -> ParamBundleLike:
-        return self.vjp(x_in, u_in, grad_out, *args, **kwargs)[1]
+    ) -> ParamBundle:
+        self._adjoint_state = grad_out
+        return self.vjp(z_in, u_in, grad_out, *args, **kwargs)[1]
 
 
 class ParamGradMixin:

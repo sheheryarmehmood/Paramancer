@@ -12,7 +12,7 @@ from ..variable.flat import FlatVar
 from ..variable.pair import PairVar
 from ..variable.types import (
     AlgoVarLike,
-    FlatLinOpType,
+    RawFlatLinOpType,
     FlatRawVarType,
     FlatVarLike,
     LinOpType,
@@ -106,7 +106,6 @@ class MomentumStep(OptimizerStep):
             x_new = z_curr.first + x_new
         return PairVar(x_new, z_curr.first)
 
-    # TODO: This previously returned `False`. But now, the way it is defined, it should return `True`. We should verify that this change does not cause any issues.
     def is_markovian(self):
         return True
 
@@ -173,7 +172,12 @@ class AffineStep(OptimizerStep):
         tracking: bool = False,
     ):
         super().__init__(tracking=tracking)
+        self._wrapped_mode = is_flat_var(vector) or is_pair_var(vector)
         self._pair_mode = is_pair_raw_var(vector) or is_pair_var(vector)
+        if self._wrapped_mode:
+            self.lin_op = lin_op
+            self.vector = vector
+            return
         if self._pair_mode:
             self.lin_op = _wrap_pair_map(lin_op)
             self.vector = as_pair_var(vector)
@@ -181,13 +185,19 @@ class AffineStep(OptimizerStep):
             self.lin_op = _wrap_flat_map(lin_op)
             self.vector = as_flat_var(vector)
 
-    def step(self, x_curr: AlgoVarLike, *args: Any, **kwargs: Any) -> AlgoVarLike:
-        self._input_is_wrapper = is_flat_var(x_curr) or is_pair_var(x_curr)
+    def step(
+        self, x_curr: AlgoVarLike, *args: Any, **kwargs: Any
+    ) -> AlgoVarLike:
+        if self._wrapped_mode:
+            x_new = self.lin_op(x_curr, *args, **kwargs) + self.vector
+            if self._residual_tracking:
+                self._residual = x_new - x_curr
+            return x_new
         x_var = as_pair_var(x_curr) if self._pair_mode else as_flat_var(x_curr)
         x_new = self.lin_op(x_var, *args, **kwargs) + self.vector
         if self._residual_tracking:
             self._residual = x_new - x_var
-        return x_new if self._input_is_wrapper else x_new.data
+        return x_new.data
 
 
 class PolyakStep(OptimizerStep):
@@ -372,7 +382,10 @@ class FISTAStep(OptimizerStep):
 
 class PDHGPartialStep(OptimizerStep):
     def __init__(
-        self, stepsize: ScalarLike, prox_map: ProxMapType, lin_op: FlatLinOpType
+        self,
+        stepsize: ScalarLike,
+        prox_map: ProxMapType,
+        lin_op: RawFlatLinOpType
     ):
         super().__init__(tracking=False)
         self.stepsize = stepsize
@@ -409,8 +422,8 @@ class PDHGStep(OptimizerStep):
         stepsize_dual: ScalarLike,
         prox_map_primal: ProxMapType,
         prox_map_dual: ProxMapType,
-        lin_op: FlatLinOpType,
-        lin_op_adj: FlatLinOpType | None = None,
+        lin_op: RawFlatLinOpType,
+        lin_op_adj: RawFlatLinOpType | None = None,
         zero_el: FlatRawVarType | None = None,
         tracking: bool = False,
     ):

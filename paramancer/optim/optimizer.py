@@ -17,7 +17,7 @@ from ..variable.flat import FlatVar
 from ..variable.pair import PairVar
 from ..variable.types import (
     AlgoVarLike,
-    FlatLinOpType,
+    RawFlatLinOpType,
     FlatRawVarType,
     FlatVarLike,
     LinOpType,
@@ -134,7 +134,7 @@ class NeumannSeries(Optimizer):
         **kwargs: Any,
     ) -> AlgoVarLike:
         if init is None:
-            init = zeros_like_raw(self.step.vector.data)
+            init = self.step.vector.zeros_like()
         return self.run(init, *args, iters=iters, **kwargs)
 
 
@@ -260,8 +260,8 @@ class PDHG(Optimizer):
         stepsize_dual: ScalarLike,
         prox_map_primal: ProxMapType,
         prox_map_dual: ProxMapType,
-        lin_op: FlatLinOpType,
-        lin_op_adj: FlatLinOpType | None = None,
+        lin_op: RawFlatLinOpType,
+        lin_op_adj: RawFlatLinOpType | None = None,
         zero_el: FlatRawVarType | None = None,
         tol: float = 1e-5,
         iters: int = 100,

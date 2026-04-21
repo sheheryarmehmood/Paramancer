@@ -309,7 +309,7 @@ def test_markovian_property():
     pgd_step = ProxGradStep(ss, prox_map, grad_map=grad_map)
     fista_step = FISTAStep(ss, prox_map, grad_map=grad_map)
     
-    assert not mm_step.is_markovian()
+    assert mm_step.is_markovian() # Its implementation allows it be Markovian.
     assert gd_step.is_markovian()
     assert prox_step.is_markovian()
     assert not hb_step.is_markovian()

@@ -75,7 +75,6 @@ class VJP:
         verbose: bool = False,
     ):
         self.step = param_step
-        self._lin_sol = None
         self.tol = tol
         self.iters = iters
         self.metric = metric
@@ -90,8 +89,8 @@ class VJP:
         *args,
         **kwargs,
     ) -> AlgoParam:
-        self._lin_sol = neumann_series(
-            lambda v: self.step.vjp_var(z_root, u_given, v),
+        lin_sol = neumann_series(
+            lambda v: self.step.vjp_var(z_root, u_given, v, *args, **kwargs),
             z_grad,
             init=init,
             tol=self.tol,
@@ -99,11 +98,11 @@ class VJP:
             metric=self.metric,
             verbose=self.verbose,
         )
-        return self.step.vjp_par(z_root, u_given, self._lin_sol)
+        return self.step.vjp_par(z_root, u_given, lin_sol, *args, **kwargs)
 
     @property
     def lin_sol(self):
-        return self._lin_sol
+        return self.step._adjoint_state
 
 
 class JVP:
@@ -116,7 +115,6 @@ class JVP:
         verbose: bool = False,
     ):
         self.step = param_step
-        self._lin_sol = None
         self.tol = tol
         self.iters = iters
         self.metric = metric
@@ -131,9 +129,11 @@ class JVP:
         *args,
         **kwargs,
     ) -> AlgoVar:
-        jvp_par_tan = self.step.jvp_par(z_root, u_given, u_tan)
-        self._lin_sol = neumann_series(
-            lambda v: self.step.jvp_var(z_root, u_given, v),
+        jvp_par_tan = self.step.jvp_par(
+            z_root, u_given, u_tan, *args, **kwargs
+        )
+        return neumann_series(
+            lambda v: self.step.jvp_var(z_root, u_given, v, *args, **kwargs),
             jvp_par_tan,
             init=init,
             tol=self.tol,
@@ -141,11 +141,6 @@ class JVP:
             metric=self.metric,
             verbose=self.verbose,
         )
-        return self._lin_sol
-
-    @property
-    def lin_sol(self):
-        return self._lin_sol
 
 
 ImplicitDifferentiation = VJP
@@ -271,14 +266,15 @@ class OptimizerID(torch.autograd.Function):
             init = extend_if_not_markovian(
                 unflatten_var(z_adj_init_fl, ctx.z_spec), fn, is_markovian
             )
-
-        u_grad_fl, _ = VJP(
+        
+        vjp = VJP(
             pm_step,
             tol=ctx.tol,
             iters=ctx.iters,
             metric=ctx.metric,
             verbose=ctx.verbose,
-        )(z_root, u_given, z_adj, init=init).flatten()
+        )
+        u_grad_fl, _ = vjp(z_root, u_given, z_adj, init=init).flatten()
 
         metadata_grads = (None,) * 8
         z_init_grads = (None,) * num_z
