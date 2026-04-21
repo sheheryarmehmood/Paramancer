@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ._mixins import FlattenMixin, TensorOpsMixin
 from .flat import FlatVar
-from .types import FlatVarLike
+from .types import FlatVarLike, PairRawVarType
 from .util import (
     as_flat_var,
     as_pair_var,
@@ -46,7 +46,7 @@ class PairVar(TensorOpsMixin, FlattenMixin):
         return as_flat_var(data)
 
     @property
-    def data(self):
+    def data(self) -> PairRawVarType:
         return (self._first.data, self._second.data)
 
     @property

@@ -8,7 +8,7 @@ from ._mixins import (
     scale_flat,
     to_tuple,
 )
-from .types import FlatVarLike, ScalarLike
+from .types import FlatVarLike, FlatRawVarType, ScalarLike
 from .util import as_flat_var, is_flat_raw_var, is_flat_var
 
 
@@ -25,7 +25,7 @@ class FlatVar(TensorOpsMixin, FlattenMixin):
         self._data = data
 
     @property
-    def data(self):
+    def data(self) -> FlatRawVarType:
         return self._data
 
     @classmethod

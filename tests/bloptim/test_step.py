@@ -139,7 +139,7 @@ def test_gradient_descent_vjp():
     grad_xkp = torch.randn(N)
     
     u = (A, b)
-    xkp_gd = grad_des(xk, u, ss)
+    # xkp_gd = grad_des(xk, u, ss)
     grad_x, (grad_A, grad_b) = vjp_grad_des(xk, u, grad_xkp, ss)
     
     xk_pm = FlatVar(xk)
@@ -147,7 +147,7 @@ def test_gradient_descent_vjp():
     pm_step = GDParamMarkovStep(
         ss, grad_map_prm=grad_lr, u_in=u_pm
     )
-    xkp_pm = pm_step.markov_step(xk_pm)
+    # xkp_pm = pm_step.markov_step(xk_pm)
     grad_xkp_pm = FlatVar(grad_xkp)
     grad_x_pm, grad_u_pm = pm_step.vjp(xk_pm, u_pm, grad_xkp_pm)
     grad_A_pm, grad_b_pm = grad_u_pm.data
@@ -192,9 +192,9 @@ def test_implicit_differentiation_with_polyak_step():
         tol=1e-4, iters=1000, metric="default"
     )
     zm_tan_neu = neumann_jvp()
-    assert torch.allclose(xm_tan_anl, zm_tan_neu.data[0], atol=1e-4)
+    assert torch.allclose(xm_tan_anl, zm_tan_neu.first.data, atol=1e-4)
     
-    grad_out = (grad_xm, torch.zeros_like(grad_xm))
+    grad_out = PairVar(grad_xm, grad_xm.zeros_like())
     neumann_vjp = NeumannSeries(
         lambda v: pm_step.vjp_var(zm, u, v), grad_out, tol=1e-4, iters=1000,
         metric="default"
