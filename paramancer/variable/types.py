@@ -99,23 +99,25 @@ IndexMapType: TypeAlias = dict[str, IndexType]
 P = ParamSpec("P")
 
 # Parametric callable aliases
-FlatVarXPrmXAnyToTen: TypeAlias = Callable[
-    Concatenate[FlatVarLike, RawParamType, P], Tensor
+FlatRawVarXPrmXAnyToTen: TypeAlias = Callable[
+    Concatenate[FlatRawVarType, RawParamType, P], Tensor
 ]
-FlatVarXPrmXAnyToFlatVar: TypeAlias = Callable[
-    Concatenate[FlatVarLike, RawParamType, P], FlatVarLike
+FlatRawVarXPrmXAnyToFlatRawVar: TypeAlias = Callable[
+    Concatenate[FlatRawVarType, RawParamType, P], FlatRawVarType
 ]
-FlatVarXAnyToTen: TypeAlias = Callable[Concatenate[FlatVarLike, P], Tensor]
-FlatVarXAnyToFlatVar: TypeAlias = Callable[
-    Concatenate[FlatVarLike, P], FlatVarLike
+FlatRawVarXAnyToTen: TypeAlias = Callable[
+    Concatenate[FlatRawVarType, P], Tensor
+]
+FlatRawVarXAnyToFlatRawVar: TypeAlias = Callable[
+    Concatenate[FlatRawVarType, P], FlatRawVarType
 ]
 
-ParamSmoothObjType: TypeAlias = FlatVarXPrmXAnyToTen
-ParamGradMapType: TypeAlias = FlatVarXPrmXAnyToFlatVar
-ParamProxMapType: TypeAlias = FlatVarXPrmXAnyToFlatVar
-PSmoothObjType: TypeAlias = FlatVarXAnyToTen
-PGradMapType: TypeAlias = FlatVarXAnyToFlatVar
-PLinOpType: TypeAlias = FlatVarXAnyToFlatVar
+ParamSmoothObjType: TypeAlias = FlatRawVarXPrmXAnyToTen
+ParamGradMapType: TypeAlias = FlatRawVarXPrmXAnyToFlatRawVar
+ParamProxMapType: TypeAlias = FlatRawVarXPrmXAnyToFlatRawVar
+PSmoothObjType: TypeAlias = FlatRawVarXAnyToTen
+PGradMapType: TypeAlias = FlatRawVarXAnyToFlatRawVar
+PLinOpType: TypeAlias = FlatRawVarXAnyToFlatRawVar
 
 # Decorator types for optimizer/step wrapper normalization
 Owner: TypeAlias = "OptimizerStep | Optimizer"

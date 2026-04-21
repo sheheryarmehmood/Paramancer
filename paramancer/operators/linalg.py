@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import torch
 
-from ..variable.flat import FlatVar
 from ..variable.types import (
-    FlatRawVarType,
+    FlatVarLike,
     ParamListType,
     PLinOpType,
     is_parameter_type,
@@ -12,7 +11,7 @@ from ..variable.types import (
 from ..variable.util import as_flat_var, is_flat_var
 
 
-def adjoint(lin_op: PLinOpType, zero_el: FlatRawVarType) -> PLinOpType:
+def adjoint(lin_op: PLinOpType, zero_el: FlatVarLike) -> PLinOpType:
     zero_was_var = is_flat_var(zero_el)
     zero_data = zero_el.data if zero_was_var else zero_el
 
@@ -22,7 +21,7 @@ def adjoint(lin_op: PLinOpType, zero_el: FlatRawVarType) -> PLinOpType:
     else:
         zero_base = zero_data.detach().clone()
 
-    def lin_op_adj(y: FlatRawVarType, *args, **kwargs):
+    def lin_op_adj(y: FlatVarLike, *args, **kwargs) -> FlatVarLike:
         outer_grad_enabled = torch.is_grad_enabled()
         if zero_was_var and not is_flat_var(y):
             raise TypeError("Expected `y` to be FlatVar when zero_el is FlatVar.")

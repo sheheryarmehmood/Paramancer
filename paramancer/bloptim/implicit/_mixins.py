@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import torch
 
-from ...optim.step import MomentumType
 from ...operators.grad import gradient
 from ...variable import ParamBundle
 from ...variable.flat import FlatVar
@@ -10,14 +9,13 @@ from ...variable.pair import PairVar
 from ...variable.types import (
     IndexMapType,
     AlgoVar,
-    FlatVarLike,
+    FlatRawVarType,
     FlattendType,
     P,
     ParamGradMapType,
     ParamProxMapType,
     ParamSmoothObjType,
     PSpecType,
-    PairVarLike,
     VSpecType,
 )
 from ...variable.util import (
@@ -104,8 +102,6 @@ class JVPMixin:
         )
         Var = PairVar if z_spec[0] == "pair" else FlatVar
         return Var.unflatten(out_tan_flat, z_spec)
-        # out_tan = unflatten_raw(out_tan_flat, z_spec)
-        # return PairVar(out_tan) if z_spec[0] == "pair" else FlatVar(out_tan)
 
     def jvp_var(
         self,
@@ -155,12 +151,6 @@ class VJPMixin:
             unflatten_raw(grad_in_flat[len(z_flat) :], u_spec), u_in.indices
         )
         return grad_z, grad_u
-        # grad_z = unflatten_raw(grad_in_flat[: len(z_flat)], x_spec)
-        # grad_u = unflatten_raw(grad_in_flat[len(z_flat) :], u_spec)
-        # return (
-        #     PairVar(grad_z) if x_spec[0] == "pair" else FlatVar(grad_z),
-        #     ParamBundle(grad_u, u_in.indices),
-        # )
 
     def vjp_var(
         self,
@@ -206,10 +196,10 @@ class ParamGradMixin:
 
     def _grad_map(
         self,
-        x: FlatVarLike,
+        x: FlatRawVarType,
         *args: P.args,
         **kwargs: P.kwargs,
-    ) -> FlatVarLike:
+    ) -> FlatRawVarType:
         if not self._u_given.takes_params("grad"):
             return self.grad_map_prm(x, *args, **kwargs)
         return self.grad_map_prm(x, self._u_given.grad, *args, **kwargs)
@@ -219,7 +209,7 @@ class ParamProxMixin:
     def __init__(self, prox_map_prm: ParamProxMapType):
         self.prox_map_prm = prox_map_prm
 
-    def _prox_map(self, x: FlatVarLike) -> FlatVarLike:
+    def _prox_map(self, x: FlatRawVarType) -> FlatRawVarType:
         if not self._u_given.takes_params("prox"):
             return self.prox_map_prm(x)
         return self.prox_map_prm(x, self._u_given.prox)
