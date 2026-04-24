@@ -27,6 +27,7 @@ TensorVarType: TypeAlias = Tensor
 TupleVarType: TypeAlias = tuple[TensorVarType, ...]
 FlatRawVarType: TypeAlias = TensorVarType | TupleVarType
 PairRawVarType: TypeAlias = tuple[FlatRawVarType, FlatRawVarType]
+AlgoRawVarType: TypeAlias = FlatRawVarType | PairRawVarType
 
 # Wrapper-aware aliases
 FlatVarLike: TypeAlias = "FlatRawVarType | FlatVar"

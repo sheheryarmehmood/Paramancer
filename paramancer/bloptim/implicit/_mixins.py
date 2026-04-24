@@ -172,6 +172,12 @@ class VJPMixin:
     ) -> ParamBundle:
         self._adjoint_state = grad_out
         return self.vjp(z_in, u_in, grad_out, *args, **kwargs)[1]
+    
+    @property
+    def adjoint_state(self) -> AlgoVar:
+        if not hasattr(self, "_adjoint_state"):
+            raise RuntimeError("Adjoint state accessed before any vjp_par call.")
+        return self._adjoint_state
 
 
 class ParamGradMixin:
