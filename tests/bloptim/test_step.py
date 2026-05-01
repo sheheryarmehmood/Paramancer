@@ -249,3 +249,4 @@ def test_implicit_differentiation_with_GD_step():
     assert torch.allclose(grad_u_anl[0], grad_u_neu.data[0], atol=1e-4)
     assert torch.allclose(grad_u_anl[1], grad_u_neu.data[1], atol=1e-4)
     assert torch.allclose(grad_u_anl[2], grad_u_neu.data[2], atol=1e-4)
+

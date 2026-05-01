@@ -195,20 +195,17 @@ class OptimizerID(torch.autograd.Function):
         metric: MetricSpec | None = None,
         verbose: bool = False,
         *flat_args: torch.Tensor,
-    ):
+    ) -> tuple[torch.Tensor, ...] | torch.Tensor:
         u_given_fl, z_init_fl, z_adj_init_fl = _split_flat_args(
             flat_args, u_spec, z_spec
         )
-        is_markovian = pm_step.is_markovian()
-        z_init = extend_if_not_markovian(
-            unflatten_var(z_init_fl, z_spec), lambda x: x, is_markovian
-        )
+        z_init = unflatten_var(z_init_fl, z_spec)
         u_given = unflatten_param(u_given_fl, u_spec, u_indices)
         pm_step.u_given = u_given
         z_min = Optimizer(
             pm_step, tol=tol, iters=iters, metric=metric, verbose=verbose
         )(z_init)
-        z_min_fl, _ = project_if_not_markovian(z_min, is_markovian).flatten()
+        z_min_fl, _ = z_min.flatten()
 
         tensors_to_save = [*z_min_fl, *u_given_fl]
         if z_adj_init_fl is not None:
