@@ -2,7 +2,7 @@
 
 ## `bloptim` Module
 
-* [ ] Implement `bloptim.implicit.optimizer.Optimizer` and its children.
+* [x] Implement `bloptim.implicit.optimizer.Optimizer` and its children.
 * [ ] Implement `bloptim.unrolled.optimizer.Optimizer` and its children.
 * [ ] Implement a warm-starting wrapper (forward-only for the unrolled Optimizers and forward and backward for the implicit Optimizers)
 * [ ] Implement Bilevel optimizer which receives a 

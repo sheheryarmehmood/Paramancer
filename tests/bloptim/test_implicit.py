@@ -1,14 +1,13 @@
 import torch
-import torch.autograd.functional as agF
-import torch.linalg as la
 import pytest
+import torch.linalg as la
 
 from paramancer.bloptim.implicit.step import (
-    NesterovMarkovParamStep, PolyakParamMarkovStep
+    NesterovMarkovParamStep
 )
-from paramancer.bloptim.implicit import VJP, OptimizerID
-from paramancer.variable import AlgoParam, FlatVar, PairVar
-from paramancer.variable import FlatVar, PairVar, ParamBundle
+from paramancer.bloptim import implicit
+from paramancer.bloptim.implicit import VJP, OptimizerID, PolyakParamMarkovStep
+from paramancer.variable import AlgoParam, FlatVar, PairVar, ParamBundle
 
 
 def test_VJP():
@@ -79,3 +78,40 @@ def test_implicit_differentiation_with_OptimizerID():
     grad_u_anl = torch.func.vjp(minimizer, A, b)[1](grad_xm)
     assert torch.allclose(u.data[0].grad, grad_u_anl[0], atol=1e-4)
     assert torch.allclose(u.data[1].grad, grad_u_anl[1], atol=1e-4)
+
+
+def test_implicit_differentiation_with_GradientDescent():
+    def grad_map(x, u, shift):
+        return x - (u + shift)
+
+    shift = torch.randn(4)
+    grad_out = torch.randn(4)
+    model = implicit.GradientDescent(
+        torch.tensor(1.0),
+        u=torch.randn(4),
+        grad_map_prm=grad_map,
+        iters=5,
+    )
+
+    with pytest.raises(RuntimeError, match="Forward initialization is unset"):
+        _ = model.fwd_init
+
+    z_root = model.u.detach() + shift
+    model.bwd_init = torch.zeros_like(z_root)
+    xm = model(shift, z_init=z_root)
+
+    assert isinstance(xm, FlatVar)
+    assert torch.allclose(xm.data, z_root)
+    assert torch.allclose(model.fwd_init.data, z_root)
+    assert torch.allclose(model.bwd_init.data, torch.zeros_like(z_root))
+    assert torch.allclose(model.fwd_sol.data, z_root)
+
+    opt = torch.optim.SGD(model.parameters(), lr=0.1)
+    opt.zero_grad()
+    u_prev = model.u.detach().clone()
+    xm.data.backward(grad_out)
+    opt.step()
+
+    assert torch.allclose(model.u.grad, grad_out)
+    assert not torch.allclose(model.u.detach(), u_prev)
+    assert isinstance(model.bwd_sol, FlatVar)

@@ -199,12 +199,14 @@ class OptimizerID(torch.autograd.Function):
         u_given_fl, z_init_fl, z_adj_init_fl = _split_flat_args(
             flat_args, u_spec, z_spec
         )
+        call_args = getattr(pm_step, "_optimizer_call_args", ())
+        call_kwargs = getattr(pm_step, "_optimizer_call_kwargs", {})
         z_init = unflatten_var(z_init_fl, z_spec)
         u_given = unflatten_param(u_given_fl, u_spec, u_indices)
         pm_step.u_given = u_given
         z_min = Optimizer(
             pm_step, tol=tol, iters=iters, metric=metric, verbose=verbose
-        )(z_init)
+        )(z_init, *call_args, **call_kwargs)
         z_min_fl, _ = z_min.flatten()
 
         tensors_to_save = [*z_min_fl, *u_given_fl]
@@ -220,6 +222,8 @@ class OptimizerID(torch.autograd.Function):
         ctx.metric = metric
         ctx.verbose = verbose
         ctx.has_z_adj_init = z_adj_init_fl is not None
+        ctx.call_args = call_args
+        ctx.call_kwargs = call_kwargs
 
         return z_min_fl[0] if len(z_min_fl) == 1 else z_min_fl
 
@@ -258,7 +262,13 @@ class OptimizerID(torch.autograd.Function):
                 z_adj_init = extend_if_not_markovian(
                     x, lambda y: y.zeros_like(), is_markovian
                 )
-                return z_adj_raw - x + pm_step.vjp_var(z_root, u_given, z_adj_init)
+                return z_adj_raw - x + pm_step.vjp_var(
+                    z_root,
+                    u_given,
+                    z_adj_init,
+                    *ctx.call_args,
+                    **ctx.call_kwargs,
+                )
 
             init = extend_if_not_markovian(
                 unflatten_var(z_adj_init_fl, ctx.z_spec), fn, is_markovian
@@ -271,7 +281,14 @@ class OptimizerID(torch.autograd.Function):
             metric=ctx.metric,
             verbose=ctx.verbose,
         )
-        u_grad_fl, _ = vjp(z_root, u_given, z_adj, init=init).flatten()
+        u_grad_fl, _ = vjp(
+            z_root,
+            u_given,
+            z_adj,
+            init,
+            *ctx.call_args,
+            **ctx.call_kwargs,
+        ).flatten()
 
         metadata_grads = (None,) * 8
         z_init_grads = (None,) * num_z
