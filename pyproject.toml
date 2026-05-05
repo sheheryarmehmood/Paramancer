@@ -14,7 +14,7 @@
     ]
     description = "A clean and modular library for smooth and non-smooth first-order optimization algorithms"
     authors = [
-        { name="Sheheryar Mehmood", email="sheheryar.m9@gmail.com" }
+        { name="anonymous", email="anonymous" }
     ]
     license = { file = "LICENSE" }
     readme = "README.md"
@@ -26,8 +26,8 @@
     ]
 
     [project.urls]
-    Homepage = "https://github.com/sheheryarmehmood/Paramancer"
-    Repository = "https://github.com/sheheryarmehmood/Paramancer"
+    Homepage = "anonymous"
+    Repository = "anonymous"
 
     [build-system]
     requires = ["setuptools>=61.0"]

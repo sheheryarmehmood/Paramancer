@@ -15,7 +15,6 @@ from .step import (
 )
 from ...variable import FlatVar, PairVar, ParamBundle
 from ...variable.types import (
-    AlgoRawVarType,
     AlgoVar,
     AlgoVarLike,
     IndexMapType,
@@ -72,7 +71,7 @@ class Optimizer(nn.Module):
     def _param_bundle(self) -> ParamBundle:
         return ParamBundle(self.u, self.u_indices)
 
-    def _coerce_state(self, z: AlgoVarLike | AlgoRawVarType) -> FlatVar:
+    def _coerce_state(self, z: AlgoVarLike) -> FlatVar:
         # FIXIT: Later, when PDHG is also implemented, we may want to allow pair states here. For now, we require a flat state for simplicity.
         if is_pair_var(z) or is_pair_raw_var(z):
             raise TypeError(
@@ -91,7 +90,7 @@ class Optimizer(nn.Module):
         return self._z_init
 
     @fwd_init.setter
-    def fwd_init(self, z: AlgoVarLike | AlgoRawVarType):
+    def fwd_init(self, z: AlgoVarLike):
         self._z_init = self._coerce_state(z)
 
     @property
@@ -99,7 +98,7 @@ class Optimizer(nn.Module):
         return self._z_adj_init
 
     @bwd_init.setter
-    def bwd_init(self, z: AlgoVarLike | AlgoRawVarType | None):
+    def bwd_init(self, z: AlgoVarLike | None):
         self._z_adj_init = None if z is None else self._coerce_state(z)
 
     @property
@@ -119,8 +118,8 @@ class Optimizer(nn.Module):
     def forward(
         self,
         *args: Any,
-        z_init: AlgoVarLike | AlgoRawVarType | None = None,
-        z_adj_init: AlgoVarLike | AlgoRawVarType | None = None,
+        z_init: AlgoVarLike | None = None,
+        z_adj_init: AlgoVarLike | None = None,
         **kwargs: Any,
     ) -> FlatVar | PairVar:
         if z_init is not None:

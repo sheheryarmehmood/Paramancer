@@ -9,7 +9,6 @@ from ... import optim
 from ...optim.step import FISTAStep, GDStep, NesterovStep, OptimizerStep, PolyakStep, ProxGradStep
 from ...variable import FlatVar, PairVar, ParamBundle
 from ...variable.types import (
-    AlgoRawVarType,
     AlgoVar,
     AlgoVarLike,
     IndexMapType,
@@ -94,7 +93,7 @@ class Optimizer(nn.Module):
     def _param_bundle(self) -> ParamBundle:
         return ParamBundle(self.u, self.u_indices)
 
-    def _coerce_state(self, z: AlgoVarLike | AlgoRawVarType) -> FlatVar | PairVar:
+    def _coerce_state(self, z: AlgoVarLike) -> AlgoVar:
         return as_pair_var(z) if is_pair_var(z) or is_pair_raw_var(z) else as_flat_var(z)
 
     def _idle_iters(self) -> int:
@@ -115,7 +114,7 @@ class Optimizer(nn.Module):
         return self._z_init
 
     @fwd_init.setter
-    def fwd_init(self, z: AlgoVarLike | AlgoRawVarType):
+    def fwd_init(self, z: AlgoVarLike):
         self._z_init = self._coerce_state(z)
 
     @property
@@ -127,7 +126,7 @@ class Optimizer(nn.Module):
     def forward(
         self,
         *args: Any,
-        z_init: AlgoVarLike | AlgoRawVarType | None = None,
+        z_init: AlgoVarLike | None = None,
         **kwargs: Any,
     ) -> FlatVar | PairVar:
         if z_init is not None:
