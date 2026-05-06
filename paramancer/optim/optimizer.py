@@ -80,8 +80,10 @@ class Optimizer:
             pbar = tqdm(pbar)
         metric_val = None
 
+        iterations_run = 0
         for k in pbar:
             x_curr = self.step(x_curr, *args, **kwargs)
+            iterations_run = k + 1
 
             if self.store_history:
                 self.history.append(x_curr.clone())
@@ -103,7 +105,7 @@ class Optimizer:
 
         self.result = OptimizationResult(
             solution=x_curr,
-            iterations=k + 1,
+            iterations=iterations_run,
             metric=metric_val,
             converged=converged,
         )
