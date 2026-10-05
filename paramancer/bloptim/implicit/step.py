@@ -51,7 +51,7 @@ class GDParamMarkovStep(
         smooth_obj_prm: ParamSmoothObjType | None = None,
         u_in: ParamBundle | None = None,
         stepsize_scheduler: StepsizeSchedType | None = None,
-        linesearch: bool = True,
+        linesearch: bool = False,
         tracking: bool = False,
     ):
         ParamGradMixin.__init__(self, smooth_obj_prm, grad_map_prm)
@@ -173,7 +173,7 @@ class FISTAParamMarkovStep(
 
 
 # Backwards-compatible aliases for the original public API.
-GDParamMarkovStep = GDParamMarkovStep
+GDMarkovParamStep = GDParamMarkovStep
 PolyakMarkovParamStep = PolyakParamMarkovStep
 NesterovMarkovParamStep = NesterovParamMarkovStep
 ProxGradMarkovParamStep = ProxGradParamMarkovStep

@@ -62,8 +62,8 @@ class TensorOpsMixin:
         return self._new_like(self._zero_like_raw_fn(self.data))
 
     def norm(self) -> torch.Tensor:
-        norms = tuple(torch.norm(x) for x in self._iter_tensors())
-        return torch.norm(torch.stack(norms))
+        norms = tuple(x.norm() for x in self._iter_tensors())
+        return torch.stack(norms).norm()
 
     def requires_grad_(self, requires_grad: bool):
         return self._new_like(

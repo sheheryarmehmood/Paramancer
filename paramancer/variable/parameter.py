@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from ._mixins import FlattenMixin, TensorOpsMixin
-from .types import IndexMapType, RawParamType
+from ._mixins import FlattenMixin, TensorOpsMixin, flat_binary
+from .types import IndexMapType, RawParamType, ParamBundleLike
+from .util import is_param_bundle
 
 
 class ParamBundle(TensorOpsMixin, FlattenMixin):
@@ -79,6 +80,18 @@ class ParamBundle(TensorOpsMixin, FlattenMixin):
 
     def _new_like(self, data):
         return type(self)(data, self.indices.copy())
+
+    def __add__(self, other: ParamBundleLike) -> ParamBundle:
+        other_raw = other.data if is_param_bundle(other) else other
+        return self._new_like(
+            flat_binary(self._data, other_raw, lambda x, y: x + y)
+        )
+
+    def __sub__(self, other: ParamBundleLike) -> ParamBundle:
+        other_raw = other.data if is_param_bundle(other) else other
+        return self._new_like(
+            flat_binary(self._data, other_raw, lambda x, y: x - y)
+        )
 
 
 AlgoParam = ParamBundle
