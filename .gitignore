@@ -10,5 +10,6 @@ paramancer/variable/__pycache__/
 storming.md
 storming.drawio
 examples/meta_learning/
+examples/meta_learning_v2/data/*
 doc.md
 PLAN_DETAILS.md
