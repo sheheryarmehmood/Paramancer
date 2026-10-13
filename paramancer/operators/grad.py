@@ -8,9 +8,9 @@ from ..variable.flat import FlatVar
 from ..variable.types import (
     FlatRawVarType,
     FlatVarLike,
+    ParamListType,
     PGradMapType,
     PSmoothObjType,
-    ParamListType,
     is_parameter_type,
 )
 from ..variable.util import flatten_flat_raw, is_flat_var, unflatten_flat_raw
@@ -23,7 +23,43 @@ def _set_req_grad(vars: tuple[torch.Tensor, ...], rgs: bool | tuple[bool, ...]):
         var.requires_grad_(rg)
 
 
-def gradient(smooth: PSmoothObjType) -> PGradMapType:
+def gradient(smooth: PSmoothObjType, create_graph: bool = False):
+    def grad_s(x: FlatVarLike, *args, **kwargs):
+        create_graph_ = create_graph and torch.is_grad_enabled()
+        
+        x_was_var = is_flat_var(x)
+        x_data = x.data if x_was_var else x
+        x_flat, x_spec = flatten_flat_raw(x_data)
+
+        requires_grad = tuple(item.requires_grad for item in x_flat)
+        _set_req_grad(x_flat, True)
+
+        with torch.enable_grad():
+            x_unflat = unflatten_flat_raw(x_flat, x_spec)
+            x_in = FlatVar(x_unflat) if x_was_var else x_unflat
+            output = smooth(x_in, *args, **kwargs).sum()
+
+        gradients = torch.autograd.grad(
+            output,
+            x_flat,
+            create_graph=create_graph_,
+            allow_unused=True,
+        )
+
+        gradients = tuple(
+            torch.zeros_like(item) if grad is None else grad
+            for item, grad in zip(x_flat, gradients)
+        )
+
+        _set_req_grad(x_flat, requires_grad)
+
+        result = unflatten_flat_raw(gradients, x_spec)
+        return FlatVar(result) if x_was_var else result
+
+    return grad_s
+
+
+def gradient_legacy(smooth: PSmoothObjType) -> PGradMapType:
     def grad_s(x: FlatVarLike, *args, **kwargs):
         outer_grad_enabled = torch.is_grad_enabled()
         x_was_var = is_flat_var(x)
@@ -65,7 +101,7 @@ def gradient(smooth: PSmoothObjType) -> PGradMapType:
     return grad_s
 
 
-def _gradient(
+def gradient_backend(
     smooth: Callable[..., torch.Tensor], *dargs: int
 ) -> Callable[..., FlatRawVarType]:
     def grad_s(*args):

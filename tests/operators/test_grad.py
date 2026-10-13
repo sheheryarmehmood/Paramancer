@@ -1,17 +1,50 @@
 from __future__ import annotations
-import torch
+
 import pytest
+import torch
 
-from paramancer.operators.grad import _gradient, gradient
-from paramancer.operators.norms import l2_sq
-from paramancer.variable import FlatVar
-from paramancer.operators.norms import inner_product, l2_sq
-from paramancer.variable.types import (
-    OptVarType, RawParamType, ScalarLike
+from paramancer.operators.grad import (
+    gradient,
+    gradient_backend,
+    gradient_legacy,
 )
+from paramancer.operators.norms import inner_product, l2_sq
+from paramancer.variable import FlatVar
+from paramancer.variable.types import OptVarType, RawParamType, ScalarLike
 
 
-def test_gradient():
+def test_gradient_without_create_graph():
+    def smooth(x: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
+        return 0.5 * scale * x.square()
+    grad_smooth = gradient(smooth, create_graph=False)
+    
+    x = torch.tensor(2.0, requires_grad=True)
+    scale = torch.tensor(3.0, requires_grad=True)
+    
+    result = grad_smooth(x, scale)
+
+    assert torch.allclose(result, scale * x)
+    assert not result.requires_grad
+
+
+def test_gradient_with_create_graph():
+    def smooth(x: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
+        return 0.5 * scale * x.square()
+    grad_smooth = gradient(smooth, create_graph=True)
+    
+    x = torch.tensor(2.0, requires_grad=True)
+    scale = torch.tensor(3.0, requires_grad=True)
+
+    result = grad_smooth(x, scale)
+    result.backward()
+
+    assert torch.allclose(result, scale * x)
+    assert torch.allclose(x.grad, scale)
+    assert torch.allclose(scale.grad, x)
+
+
+
+def test_gradient_legacy():
     def smooth(x, u, a1, a2): # a1 and a2 can be non-tensors
         x_data = x.data if isinstance(x, FlatVar) else x
         x1, x2 = x_data
@@ -19,7 +52,7 @@ def test_gradient():
         return 0.5 * a1 * u2.sum() * l2_sq(x1) + a2 * inner_product(x2, u1)
     # If `smooth` can handle different kinds of inputs, then so can `grad_fn`.
     # We need to construct `grad_fn` only once.
-    grad_fn = gradient(smooth)
+    grad_fn = gradient_legacy(smooth)
     
     x1, x2 = torch.randn(5), torch.randn(7)
     u1, u2 = torch.randn(7), torch.randn(10)
@@ -54,7 +87,7 @@ def test_gradient():
     assert not x2.requires_grad
 
 
-def test_gradient_differentiability_without_params():
+def test_gradient_legacy_differentiability_without_params():
     def smooth(x: torch.Tensor, a: float) -> torch.Tensor:
         return 0.5 * a * b * x ** 2
     
@@ -67,7 +100,7 @@ def test_gradient_differentiability_without_params():
     a = 5.
     b = torch.randn(1).squeeze()
     x = torch.randn(1).squeeze()
-    grad_auto = gradient(smooth)
+    grad_auto = gradient_legacy(smooth)
     
     gd = grad(x, a)
     Jxgd, Jbgd = Jac_xb_grad(x, a)
@@ -89,7 +122,7 @@ def test_gradient_differentiability_without_params():
         grad_auto(x, a).backward()
     
 
-def test_gradient_differentiability_with_params_args_kwargs():
+def test_gradient_legacy_differentiability_with_params_args_kwargs():
     def smooth_bvar(
         x: OptVarType, a: torch.Tensor, b: ScalarLike, c: ScalarLike = 4
     ) -> torch.Tensor:
@@ -134,8 +167,8 @@ def test_gradient_differentiability_with_params_args_kwargs():
         torch.randn(gx.shape) for gx in gd
     )
     
-    grad_bvar = gradient(smooth_bvar)
-    grad_var = gradient(smooth_var)
+    grad_bvar = gradient_legacy(smooth_bvar)
+    grad_var = gradient_legacy(smooth_var)
     vhp = vHp((x1, x2, x3), a, b, c, *gd_grad)
     vJgp_a, vJgp_b = vJgp((x1, x2, x3), a, b, c, *gd_grad)
     
@@ -192,7 +225,7 @@ def test_gradient_differentiability_with_params_args_kwargs():
     
 
 
-def test_backend_gradient():
+def test_gradient_backend():
     def fn(x, A, b):
         return 0.5 * l2_sq(A @ x - b)
     
@@ -204,15 +237,15 @@ def test_backend_gradient():
     grad_b_tr = b - A @ x
     grad_A_tr = torch.outer(A @ x - b, x)
     
-    gradx_fn = _gradient(fn, 0)
-    gradAb_fn = _gradient(fn, 1, 2)
+    gradx_fn = gradient_backend(fn, 0)
+    gradAb_fn = gradient_backend(fn, 1, 2)
     
     assert torch.allclose(grad_x_tr, gradx_fn(x, A, b), atol=1e-5)
     assert torch.allclose(grad_b_tr, gradAb_fn(x, A, b)[1], atol=1e-5)
     assert torch.allclose(grad_A_tr, gradAb_fn(x, A, b)[0], atol=1e-5)
 
 
-def test_backend_gradient_vhp():
+def test_gradient_backend_vhp():
     def fn(x, A, b):
         return 0.5 * l2_sq(A @ x - b)
     
@@ -221,7 +254,7 @@ def test_backend_gradient_vhp():
     x = torch.randn(10, requires_grad=True)
     v = torch.randn(10)
     
-    gradxA_fn = _gradient(fn, 0)
+    gradxA_fn = gradient_backend(fn, 0)
     gx = gradxA_fn(x, A, b)
     
     (gx @ v).backward()

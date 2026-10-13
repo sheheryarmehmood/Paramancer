@@ -4,15 +4,12 @@ import abc
 from enum import Enum
 from typing import Any
 
-from .scheduler import MomentumScheduler
-from .util import ensure_flat_input, ensure_pair_input
 from ..operators.grad import gradient
 from ..operators.linalg import adjoint
 from ..variable.flat import FlatVar
 from ..variable.pair import PairVar
 from ..variable.types import (
     AlgoVarLike,
-    RawFlatLinOpType,
     FlatRawVarType,
     FlatVarLike,
     LinOpType,
@@ -20,10 +17,19 @@ from ..variable.types import (
     PGradMapType,
     ProxMapType,
     PSmoothObjType,
+    RawFlatLinOpType,
     ScalarLike,
     StepsizeSchedType,
 )
-from ..variable.util import as_flat_var, as_pair_var, is_flat_var, is_pair_raw_var, is_pair_var
+from ..variable.util import (
+    as_flat_var,
+    as_pair_var,
+    is_flat_var,
+    is_pair_raw_var,
+    is_pair_var,
+)
+from .scheduler import MomentumScheduler
+from .util import ensure_flat_input, ensure_pair_input
 
 
 def _wrap_flat_map(fn):
