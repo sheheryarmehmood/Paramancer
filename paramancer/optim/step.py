@@ -134,7 +134,7 @@ class GDStep(OptimizerStep):
 
     @ensure_flat_input
     def step(self, x_curr: FlatVar, *args: Any, **kwargs: Any) -> FlatVar:
-        d_curr = -self.grad_map(x_curr, *args, **kwargs)
+        d_curr = -self._wrapped_grad_map(x_curr, *args, **kwargs)
         self._set_stepsize(x_curr, d_curr)
         x_new = x_curr + self.stepsize * d_curr
         if self._residual_tracking:
@@ -148,9 +148,9 @@ class GDStep(OptimizerStep):
                 " both. One of them must be set to `None`."
             )
         if grad_map is None:
-            self.grad_map = _wrap_flat_map(gradient(smooth_obj))
+            self.grad_map = gradient(smooth_obj)
         else:
-            self.grad_map = _wrap_flat_map(grad_map)
+            self.grad_map = grad_map
 
     def _set_stepsize(self, x_curr: FlatVar, d_curr: FlatVar) -> None:
         if not self.stepsize_scheduler:
@@ -160,15 +160,34 @@ class GDStep(OptimizerStep):
         else:
             self.stepsize = self.stepsize_scheduler()
 
+    @property
+    def grad_map(self):
+        return self._raw_grad_map
+
+    @grad_map.setter
+    def grad_map(self, grad_map):
+        self._raw_grad_map = grad_map
+        self._wrapped_grad_map = _wrap_flat_map(grad_map)
+
 
 class ProxStep(OptimizerStep):
     def __init__(self, prox_map: ProxMapType):
         super().__init__(tracking=False)
-        self.prox_map = _wrap_flat_map(prox_map)
+        self.prox_map = prox_map
 
     @ensure_flat_input
     def step(self, x_curr: FlatVar) -> FlatVar:
-        return self.prox_map(x_curr)
+        return self._wrapped_prox_map(x_curr)
+
+    @property
+    def prox_map(self):
+        return self._raw_prox_map
+
+    @prox_map.setter
+    def prox_map(self, prox_map):
+        self._raw_prox_map = prox_map
+        self._wrapped_prox_map = _wrap_flat_map(prox_map)
+
 
 class AffineStep(OptimizerStep):
     def __init__(
@@ -178,32 +197,88 @@ class AffineStep(OptimizerStep):
         tracking: bool = False,
     ):
         super().__init__(tracking=tracking)
-        self._wrapped_mode = is_flat_var(vector) or is_pair_var(vector)
-        self._pair_mode = is_pair_raw_var(vector) or is_pair_var(vector)
-        if self._wrapped_mode:
-            self.lin_op = lin_op
-            self.vector = vector
-            return
-        if self._pair_mode:
-            self.lin_op = _wrap_pair_map(lin_op)
-            self.vector = as_pair_var(vector)
-        else:
-            self.lin_op = _wrap_flat_map(lin_op)
-            self.vector = as_flat_var(vector)
+        self._set_vector(vector, allow_mode_change=True)
+        self.lin_op = lin_op
 
     def step(
         self, x_curr: AlgoVarLike, *args: Any, **kwargs: Any
     ) -> AlgoVarLike:
         if self._wrapped_mode:
-            x_new = self.lin_op(x_curr, *args, **kwargs) + self.vector
+            x_new = (
+                self._wrapped_lin_op(x_curr, *args, **kwargs) +
+                self._wrapped_vector
+            )
             if self._residual_tracking:
                 self._residual = x_new - x_curr
             return x_new
         x_var = as_pair_var(x_curr) if self._pair_mode else as_flat_var(x_curr)
-        x_new = self.lin_op(x_var, *args, **kwargs) + self.vector
+        x_new = (
+            self._wrapped_lin_op(x_var, *args, **kwargs) +
+            self._wrapped_vector
+        )
         if self._residual_tracking:
             self._residual = x_new - x_var
         return x_new.data
+
+    def replace(
+            self,
+            lin_op: LinOpType,
+            vector: AlgoVarLike,
+        ) -> None:
+        self._set_vector(vector, allow_mode_change=True)
+        self.lin_op = lin_op
+
+    @property
+    def vector(self) -> AlgoVarLike:
+        return self._raw_vector
+
+    @vector.setter
+    def vector(self, vector) -> None:
+        self._set_vector(vector, allow_mode_change=False)
+
+    @property
+    def lin_op(self) -> LinOpType:
+        return self._raw_lin_op
+
+    @lin_op.setter
+    def lin_op(self, lin_op) -> None:
+        self._raw_lin_op = lin_op
+        if self._wrapped_mode:
+            self._wrapped_lin_op = lin_op
+        elif self._pair_mode:
+            self._wrapped_lin_op = _wrap_pair_map(lin_op)
+        else:
+            self._wrapped_lin_op = _wrap_flat_map(lin_op)
+
+    def _set_vector(self, vector, allow_mode_change: bool) -> None:
+        wrapped_mode = is_flat_var(vector) or is_pair_var(vector)
+        pair_mode = is_pair_raw_var(vector) or is_pair_var(vector)
+
+        mode_exists = hasattr(self, "_wrapped_mode")
+        mode_changed = (
+            mode_exists
+            and (
+                self._wrapped_mode != wrapped_mode
+                or self._pair_mode != pair_mode
+            )
+        )
+
+        if mode_changed and not allow_mode_change:
+            raise ValueError(
+                "Changing the vector structure also requires replacing the "
+                "linear operator. Use `replace()` to set both together."
+            )
+
+        self._wrapped_mode = wrapped_mode
+        self._pair_mode = pair_mode
+        self._raw_vector = vector
+
+        if wrapped_mode:
+            self._wrapped_vector = vector
+        elif pair_mode:
+            self._wrapped_vector = as_pair_var(vector)
+        else:
+            self._wrapped_vector = as_flat_var(vector)
 
 
 class PolyakStep(OptimizerStep):
@@ -217,7 +292,7 @@ class PolyakStep(OptimizerStep):
     ):
         super().__init__(tracking=False)
         self.gd_step = GDStep(
-            stepsize, smooth_obj=smooth_obj, grad_map=grad_map, 
+            stepsize, smooth_obj=smooth_obj, grad_map=grad_map,
             tracking=tracking
         )
         self.mm_step = MomentumStep(momentum, strategy=MomentumType.Polyak)
@@ -251,6 +326,14 @@ class PolyakStep(OptimizerStep):
     def x_prev(self, x):
         self._x_prev = x
 
+    @property
+    def grad_map(self):
+        return self.gd_step.grad_map
+
+    @grad_map.setter
+    def grad_map(self, grad_map):
+        self.gd_step.grad_map = grad_map
+
 
 class NesterovStep(OptimizerStep):
     def __init__(
@@ -265,7 +348,7 @@ class NesterovStep(OptimizerStep):
         if momentum_scheduler is None:
             momentum_scheduler = MomentumScheduler()
         self.gd_step = GDStep(
-            stepsize, smooth_obj=smooth_obj, grad_map=grad_map, 
+            stepsize, smooth_obj=smooth_obj, grad_map=grad_map,
             tracking=tracking
         )
         self.mm_step = MomentumStep(
@@ -301,6 +384,14 @@ class NesterovStep(OptimizerStep):
     def x_prev(self, x):
         self._x_prev = x
 
+    @property
+    def grad_map(self):
+        return self.gd_step.grad_map
+
+    @grad_map.setter
+    def grad_map(self, grad_map):
+        self.gd_step.grad_map = grad_map
+
     def restart(self):
         self._x_prev = None
         self.mm_step.momentum_scheduler.restart()
@@ -327,6 +418,22 @@ class ProxGradStep(OptimizerStep):
         if self._residual_tracking:
             self._residual = x_new - x_curr
         return x_new
+
+    @property
+    def grad_map(self):
+        return self.gd_step.grad_map
+
+    @grad_map.setter
+    def grad_map(self, grad_map):
+        self.gd_step.grad_map = grad_map
+
+    @property
+    def prox_map(self):
+        return self.prox_step.prox_map
+
+    @prox_map.setter
+    def prox_map(self, prox_map):
+        self.prox_step.prox_map = prox_map
 
 
 class FISTAStep(OptimizerStep):
@@ -382,6 +489,22 @@ class FISTAStep(OptimizerStep):
     def x_prev(self, x):
         self._x_prev = x
 
+    @property
+    def grad_map(self):
+        return self.pgd_step.grad_map
+
+    @grad_map.setter
+    def grad_map(self, grad_map):
+        self.pgd_step.grad_map = grad_map
+
+    @property
+    def prox_map(self):
+        return self.pgd_step.prox_map
+
+    @prox_map.setter
+    def prox_map(self, prox_map):
+        self.pgd_step.prox_map = prox_map
+
     def restart(self):
         self._x_prev = None
         self.mm_step.momentum_scheduler.restart()
@@ -392,10 +515,10 @@ class PDHGPartialStep(OptimizerStep):
         stepsize: ScalarLike,
         prox_map: ProxMapType,
         lin_op: RawFlatLinOpType
-    ):
+    ) -> None:
         super().__init__(tracking=False)
         self.stepsize = stepsize
-        self.lin_op = _wrap_flat_map(lin_op)
+        self.lin_op = lin_op
         self.prox_step = ProxStep(prox_map)
 
     def __call__(
@@ -416,9 +539,25 @@ class PDHGPartialStep(OptimizerStep):
         **kwargs: Any
     ) -> FlatVar:
         oth_var = as_flat_var(oth_curr)
-        return self.prox_step(
-            inp_curr - self.stepsize * self.lin_op(oth_var, *args, **kwargs)
-        )
+        lin_out = self._wrapped_lin_op(oth_var, *args, **kwargs)
+        return self.prox_step(inp_curr - self.stepsize * lin_out)
+
+    @property
+    def lin_op(self) -> RawFlatLinOpType:
+        return self._raw_lin_op
+
+    @lin_op.setter
+    def lin_op(self, lin_op: RawFlatLinOpType):
+        self._raw_lin_op = lin_op
+        self._wrapped_lin_op = _wrap_flat_map(lin_op)
+
+    @property
+    def prox_map(self) -> ProxMapType:
+        return self.prox_step.prox_map
+
+    @prox_map.setter
+    def prox_map(self, prox_map: ProxMapType):
+        self.prox_step.prox_map = prox_map
 
 
 class PDHGStep(OptimizerStep):
@@ -444,7 +583,9 @@ class PDHGStep(OptimizerStep):
         self.primal_step = PDHGPartialStep(
             stepsize_primal, prox_map_primal, lin_op_adj
         )
-        self.dual_step = PDHGPartialStep(stepsize_dual, prox_map_dual, lin_op)
+        self.dual_step = PDHGPartialStep(
+            stepsize_dual, prox_map_dual, lin_op
+        )
 
     @ensure_pair_input
     def step(self, z_curr: PairVar, *args: Any, **kwargs: Any) -> PairVar:
@@ -455,3 +596,43 @@ class PDHGStep(OptimizerStep):
         if self._residual_tracking:
             self._residual = z_new - z_curr
         return z_new
+
+    def replace_lin_op(
+        self,
+        lin_op: RawFlatLinOpType,
+        lin_op_adj: RawFlatLinOpType | None = None,
+        zero_el: FlatRawVarType | None = None,
+    ) -> None:
+        if (lin_op_adj is None) == (zero_el is None):
+            raise ValueError(
+                "Either `zero_el` should be supplied or `lin_op_adj`, but not"
+                " both. One of them must be set to `None`."
+            )
+        if lin_op_adj is None:
+            lin_op_adj = adjoint(lin_op, zero_el)
+        self.dual_step.lin_op = lin_op
+        self.primal_step.lin_op = lin_op_adj
+
+    @property
+    def lin_op(self) -> RawFlatLinOpType:
+        return self.dual_step.lin_op
+
+    @property
+    def lin_op_adj(self) -> RawFlatLinOpType:
+        return self.primal_step.lin_op
+
+    @property
+    def prox_map_primal(self) -> ProxMapType:
+        return self.primal_step.prox_map
+
+    @prox_map_primal.setter
+    def prox_map_primal(self, prox_map: ProxMapType) -> None:
+        self.primal_step.prox_map = prox_map
+
+    @property
+    def prox_map_dual(self) -> ProxMapType:
+        return self.dual_step.prox_map
+
+    @prox_map_dual.setter
+    def prox_map_dual(self, prox_map: ProxMapType) -> None:
+        self.dual_step.prox_map = prox_map
