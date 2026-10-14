@@ -1,12 +1,19 @@
+from __future__ import annotations
+
+import pytest
 import torch
 import torch.autograd.functional as agF
 import torch.linalg as la
-import pytest
+
 from paramancer.operators.norms import l2, l2_sq
 from paramancer.optim import (
+    FISTA,
+    PDHG,
+    AcceleratedGradient,
+    GradientDescent,
+    HeavyBall,
     NeumannSeries,
-    GradientDescent, HeavyBall, AcceleratedGradient,
-    ProximalGradient, FISTA, PDHG
+    ProximalGradient,
 )
 
 

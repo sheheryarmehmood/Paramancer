@@ -1,12 +1,21 @@
+from __future__ import annotations
+
+import pytest
 import torch
 import torch.linalg as la
-import pytest
 import torch.nn.functional as nnF
 
-from paramancer.optim.step import ProxStep, GDStep, MomentumStep
-from paramancer.optim.step import PolyakStep, NesterovStep
-from paramancer.optim.step import ProxGradStep, FISTAStep, PDHGStep
 from paramancer.operators.linalg import adjoint
+from paramancer.optim.step import (
+    FISTAStep,
+    GDStep,
+    MomentumStep,
+    NesterovStep,
+    PDHGStep,
+    PolyakStep,
+    ProxGradStep,
+    ProxStep,
+)
 
 
 def test_gd_step_no_grad_map_with_args_and_kwargs():

@@ -11,7 +11,47 @@ from ..variable.types import (
 from ..variable.util import as_flat_var, is_flat_var
 
 
-def adjoint(lin_op: PLinOpType, zero_el: FlatVarLike) -> PLinOpType:
+def adjoint(
+    lin_op: PLinOpType,
+    zero_el: FlatVarLike,
+    create_graph: bool = False,
+) -> PLinOpType:
+    zero_was_var = is_flat_var(zero_el)
+    zero_data = zero_el.data if zero_was_var else zero_el
+
+    multi_var_op = isinstance(zero_data, tuple)
+    if multi_var_op:
+        zero_base = tuple(z.detach().clone() for z in zero_data)
+    else:
+        zero_base = zero_data.detach().clone()
+
+    def lin_op_adj(y: FlatVarLike, *args, **kwargs) -> FlatVarLike:
+        create_graph_ = create_graph and torch.is_grad_enabled()
+
+        if zero_was_var and not is_flat_var(y):
+            raise TypeError("Expected `y` to be FlatVar when zero_el is FlatVar.")
+        if not zero_was_var and is_flat_var(y):
+            raise TypeError(
+                "Expected raw flat variable input when zero_el is raw flat data."
+            )
+
+        y_data = y.data if is_flat_var(y) else y
+
+        with torch.enable_grad():
+            def func(*zl):
+                raw = tuple(zl) if multi_var_op else zl[0]
+                return lin_op(raw, *args, **kwargs)
+
+            out = torch.autograd.functional.vjp(
+                func, zero_base, y_data, create_graph=create_graph_
+            )[1]
+
+        return as_flat_var(out) if zero_was_var else out
+
+    return lin_op_adj
+
+
+def adjoint_legacy(lin_op: PLinOpType, zero_el: FlatVarLike) -> PLinOpType:
     zero_was_var = is_flat_var(zero_el)
     zero_data = zero_el.data if zero_was_var else zero_el
 
