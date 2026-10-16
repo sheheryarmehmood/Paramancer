@@ -1,23 +1,23 @@
 from __future__ import annotations
+
 from collections.abc import Callable
-from typing import TYPE_CHECKING
-from typing import Concatenate, Literal, ParamSpec, TypeAlias
+from typing import TYPE_CHECKING, Concatenate, Literal, ParamSpec, TypeAlias
 
 from torch import Tensor, nn
 
 if TYPE_CHECKING:
+    from ..bloptim.implicit.step import (
+        FISTAParamMarkovStep,
+        GDParamMarkovStep,
+        NesterovMarkovParamStep,
+        PolyakMarkovParamStep,
+        ProxGradMarkovParamStep,
+    )
+    from ..optim.optimizer import Optimizer
+    from ..optim.step import OptimizerStep
     from .flat import FlatVar
     from .pair import PairVar
     from .parameter import ParamBundle
-    from ..optim.optimizer import Optimizer
-    from ..optim.step import OptimizerStep
-    from ..bloptim.implicit.step import (
-        GDParamMarkovStep,
-        PolyakMarkovParamStep,
-        NesterovMarkovParamStep,
-        ProxGradMarkovParamStep,
-        FISTAParamMarkovStep
-    )
 
 # Scalars
 ScalarLike: TypeAlias = float | Tensor
@@ -115,7 +115,12 @@ FlatRawVarXAnyToFlatRawVar: TypeAlias = Callable[
 
 ParamSmoothObjType: TypeAlias = FlatRawVarXPrmXAnyToTen
 ParamGradMapType: TypeAlias = FlatRawVarXPrmXAnyToFlatRawVar
-ParamProxMapType: TypeAlias = FlatRawVarXPrmXAnyToFlatRawVar
+ParamProxMapType: TypeAlias = Callable[
+    [FlatRawVarType, RawParamType], FlatRawVarType
+]
+ParamLinOpType: TypeAlias = Callable[
+    [FlatRawVarType, RawParamType], FlatRawVarType
+]
 PSmoothObjType: TypeAlias = FlatRawVarXAnyToTen
 PGradMapType: TypeAlias = FlatRawVarXAnyToFlatRawVar
 PLinOpType: TypeAlias = FlatRawVarXAnyToFlatRawVar

@@ -539,7 +539,7 @@ class PDHGPartialStep(OptimizerStep):
         **kwargs: Any
     ) -> FlatVar:
         oth_var = as_flat_var(oth_curr)
-        lin_out = self._wrapped_lin_op(oth_var, *args, **kwargs)
+        lin_out = self._wrapped_lin_op(oth_var)
         return self.prox_step(inp_curr - self.stepsize * lin_out)
 
     @property
