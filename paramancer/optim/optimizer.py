@@ -1,7 +1,30 @@
 from __future__ import annotations
 
+import math
+from numbers import Integral, Real
 from typing import Any
 
+from ..variable.flat import FlatVar
+from ..variable.pair import PairVar
+from ..variable.types import (
+    AlgoVarLike,
+    FlatRawVarType,
+    FlatVarLike,
+    LinOpType,
+    MetricSpec,
+    MomentumSchedType,
+    PGradMapType,
+    ProxMapType,
+    PSmoothObjType,
+    RawFlatLinOpType,
+    ScalarLike,
+)
+from ..variable.util import (
+    as_pair_var,
+    is_flat_var,
+    is_pair_raw_var,
+    is_pair_var,
+)
 from .step import (
     AffineStep,
     FISTAStep,
@@ -13,23 +36,6 @@ from .step import (
     ProxGradStep,
 )
 from .util import OptimizationResult, to_float_scalar
-from ..variable.flat import FlatVar
-from ..variable.pair import PairVar
-from ..variable.types import (
-    AlgoVarLike,
-    RawFlatLinOpType,
-    FlatRawVarType,
-    FlatVarLike,
-    LinOpType,
-    MetricSpec,
-    MomentumSchedType,
-    PGradMapType,
-    ProxMapType,
-    PSmoothObjType,
-    ScalarLike,
-)
-from ..variable.util import is_pair_raw_var, zeros_like_raw
-from ..variable.util import as_pair_var, is_flat_var, is_pair_var
 
 
 class Optimizer:
@@ -42,6 +48,8 @@ class Optimizer:
         store_history: bool = False,
         verbose: bool = False,
     ):
+        self._validate_iters(iters)
+        self._validate_tol(tol)
         self.step = step
         self.tol = tol
         self.iters = iters
@@ -52,18 +60,33 @@ class Optimizer:
         self.result = None
 
     def __call__(
-        self, x_init: AlgoVarLike, *args: Any, iters: int | None = None, **kwargs: Any
+        self,
+        x_init: AlgoVarLike,
+        *args: Any,
+        iters: int | None = None,
+        **kwds: Any
     ) -> AlgoVarLike:
-        return self.run(x_init, *args, iters=iters, **kwargs)
+        return self.run(x_init, *args, iters=iters, **kwds)
 
     def run(
-        self, x_init: AlgoVarLike, *args: Any, iters: int | None = None, **kwargs: Any
+        self,
+        x_init: AlgoVarLike,
+        *args: Any,
+        iters: int | None = None,
+        **kwds: Any
     ) -> AlgoVarLike:
+        if iters is not None:
+            self._validate_iters(iters)
+
         input_is_wrapper = is_flat_var(x_init) or is_pair_var(x_init)
         x_curr = (
             x_init.clone()
             if input_is_wrapper
-            else (as_pair_var(x_init) if is_pair_raw_var(x_init) else FlatVar(x_init))
+            else (
+                as_pair_var(x_init)
+                if is_pair_raw_var(x_init)
+                else FlatVar(x_init)
+            )
         )
 
         if self.store_history:
@@ -82,7 +105,7 @@ class Optimizer:
 
         iterations_run = 0
         for k in pbar:
-            x_curr = self.step(x_curr, *args, **kwargs)
+            x_curr = self.step(x_curr, *args, **kwds)
             iterations_run = k + 1
 
             if self.store_history:
@@ -112,6 +135,20 @@ class Optimizer:
 
         return x_curr if input_is_wrapper else x_curr.data
 
+    @staticmethod
+    def _validate_iters(iters: int) -> None:
+        if isinstance(iters, bool) or not isinstance(iters, Integral):
+            raise TypeError("`iters` must be an integer.")
+        if iters < 0:
+            raise ValueError("`iters` must be non-negative.")
+
+    @staticmethod
+    def _validate_tol(tol: float) -> None:
+        if isinstance(tol, bool) or not isinstance(tol, Real):
+            raise TypeError("`tol` must be a real number.")
+        if not math.isfinite(tol) or tol < 0:
+            raise ValueError("`tol` must be finite and non-negative.")
+
 
 class NeumannSeries(Optimizer):
     def __init__(
@@ -133,11 +170,11 @@ class NeumannSeries(Optimizer):
         *args: Any,
         init: AlgoVarLike | None = None,
         iters: int | None = None,
-        **kwargs: Any,
+        **kwds: Any,
     ) -> AlgoVarLike:
         if init is None:
             init = self.step.vector.zeros_like()
-        return self.run(init, *args, iters=iters, **kwargs)
+        return self.run(init, *args, iters=iters, **kwds)
 
 
 class GradientDescent(Optimizer):
@@ -154,7 +191,10 @@ class GradientDescent(Optimizer):
     ):
         tracking = metric == "default"
         step = GDStep(
-            stepsize, smooth_obj=smooth_obj, grad_map=grad_map, tracking=tracking
+            stepsize,
+            smooth_obj=smooth_obj,
+            grad_map=grad_map,
+            tracking=tracking,
         )
         super().__init__(step, tol, iters, metric, store_history, verbose)
 
@@ -174,7 +214,11 @@ class HeavyBall(Optimizer):
     ):
         tracking = metric == "default"
         step = PolyakStep(
-            stepsize, momentum, smooth_obj=smooth_obj, grad_map=grad_map, tracking=tracking
+            stepsize,
+            momentum,
+            smooth_obj=smooth_obj,
+            grad_map=grad_map,
+            tracking=tracking,
         )
         super().__init__(step, tol, iters, metric, store_history, verbose)
 
@@ -289,11 +333,11 @@ class PDHG(Optimizer):
         x_init_dual: FlatVarLike,
         *args: Any,
         iters: int | None = None,
-        **kwargs: Any,
+        **kwds: Any,
     ) -> AlgoVarLike:
         x_init = (
             PairVar(x_init_primal, x_init_dual)
             if is_flat_var(x_init_primal) or is_flat_var(x_init_dual)
             else (x_init_primal, x_init_dual)
         )
-        return self.run(x_init, *args, iters=iters, **kwargs)
+        return self.run(x_init, *args, iters=iters, **kwds)

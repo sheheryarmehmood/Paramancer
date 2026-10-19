@@ -33,15 +33,15 @@ from .util import ensure_flat_input, ensure_pair_input
 
 
 def _wrap_flat_map(fn):
-    def wrapped(x: FlatVar, *args: Any, **kwargs: Any) -> FlatVar:
-        return FlatVar(fn(x.data, *args, **kwargs))
+    def wrapped(x: FlatVar, *args: Any, **kwds: Any) -> FlatVar:
+        return FlatVar(fn(x.data, *args, **kwds))
 
     return wrapped
 
 
 def _wrap_pair_map(fn):
-    def wrapped(x: PairVar, *args: Any, **kwargs: Any) -> PairVar:
-        return PairVar(fn(x.data, *args, **kwargs))
+    def wrapped(x: PairVar, *args: Any, **kwds: Any) -> PairVar:
+        return PairVar(fn(x.data, *args, **kwds))
 
     return wrapped
 
@@ -59,12 +59,12 @@ class OptimizerStep(abc.ABC):
         self._input_is_wrapper = True
 
     @abc.abstractmethod
-    def step(self, x_curr, *args: Any, **kwargs: Any):
+    def step(self, x_curr, *args: Any, **kwds: Any):
         pass
 
-    def __call__(self, x_curr: AlgoVarLike, *args: Any, **kwargs: Any):
+    def __call__(self, x_curr: AlgoVarLike, *args: Any, **kwds: Any):
         self._input_is_wrapper = is_flat_var(x_curr) or is_pair_var(x_curr)
-        return self.step(x_curr, *args, **kwargs)
+        return self.step(x_curr, *args, **kwds)
 
     @property
     def residual(self) -> AlgoVarLike:
@@ -99,21 +99,37 @@ class MomentumStep(OptimizerStep):
                 "parameter strategy can only be either "
                 "MomentumType.Nesterov or MomentumType.Polyak"
             )
-        self.momentum = momentum
-        self.strategy = strategy
-        self.momentum_scheduler = momentum_scheduler
+        self._momentum = momentum
+        self._strategy = strategy
+        self._momentum_scheduler = momentum_scheduler
 
     @ensure_pair_input
     def step(self, z_curr: PairVar) -> PairVar:
-        if self.momentum_scheduler:
-            self.momentum = self.momentum_scheduler()
-        x_new = self.momentum * (z_curr.first - z_curr.second)
-        if self.strategy == MomentumType.Nesterov:
+        if self._momentum_scheduler:
+            self._momentum = self._momentum_scheduler()
+        x_new = self._momentum * (z_curr.first - z_curr.second)
+        if self._strategy == MomentumType.Nesterov:
             x_new = z_curr.first + x_new
         return PairVar(x_new, z_curr.first)
 
     def is_markovian(self):
         return True
+    
+    @property
+    def momentum(self):
+        return self._momentum
+    
+    @momentum.setter
+    def momentum(self, momentum: ScalarLike | None):
+        self._momentum = momentum
+    
+    @property
+    def momentum_scheduler(self):
+        return self._momentum_scheduler
+    
+    @momentum_scheduler.setter
+    def momentum_scheduler(self, scheduler: MomentumSchedType | None):
+        self._momentum_scheduler = scheduler
 
 
 class GDStep(OptimizerStep):
@@ -127,16 +143,16 @@ class GDStep(OptimizerStep):
         tracking: bool = False,
     ):
         super().__init__(tracking=tracking)
-        self.stepsize = stepsize
+        self._stepsize = stepsize
         self._init_grad_map(smooth_obj, grad_map)
-        self.stepsize_scheduler = stepsize_scheduler
+        self._stepsize_scheduler = stepsize_scheduler
         self.linesearch = linesearch
 
     @ensure_flat_input
-    def step(self, x_curr: FlatVar, *args: Any, **kwargs: Any) -> FlatVar:
-        d_curr = -self._wrapped_grad_map(x_curr, *args, **kwargs)
+    def step(self, x_curr: FlatVar, *args: Any, **kwds: Any) -> FlatVar:
+        d_curr = -self._wrapped_grad_map(x_curr, *args, **kwds)
         self._set_stepsize(x_curr, d_curr)
-        x_new = x_curr + self.stepsize * d_curr
+        x_new = x_curr + self._stepsize * d_curr
         if self._residual_tracking:
             self._residual = x_new - x_curr
         return x_new
@@ -153,12 +169,12 @@ class GDStep(OptimizerStep):
             self.grad_map = grad_map
 
     def _set_stepsize(self, x_curr: FlatVar, d_curr: FlatVar) -> None:
-        if not self.stepsize_scheduler:
+        if not self._stepsize_scheduler:
             return
         if self.linesearch:
-            self.stepsize = self.stepsize_scheduler(x_curr.data, d_curr.data)
+            self._stepsize = self._stepsize_scheduler(x_curr.data, d_curr.data)
         else:
-            self.stepsize = self.stepsize_scheduler()
+            self._stepsize = self._stepsize_scheduler()
 
     @property
     def grad_map(self):
@@ -201,11 +217,11 @@ class AffineStep(OptimizerStep):
         self.lin_op = lin_op
 
     def step(
-        self, x_curr: AlgoVarLike, *args: Any, **kwargs: Any
+        self, x_curr: AlgoVarLike, *args: Any, **kwds: Any
     ) -> AlgoVarLike:
         if self._wrapped_mode:
             x_new = (
-                self._wrapped_lin_op(x_curr, *args, **kwargs) +
+                self._wrapped_lin_op(x_curr, *args, **kwds) +
                 self._wrapped_vector
             )
             if self._residual_tracking:
@@ -213,7 +229,7 @@ class AffineStep(OptimizerStep):
             return x_new
         x_var = as_pair_var(x_curr) if self._pair_mode else as_flat_var(x_curr)
         x_new = (
-            self._wrapped_lin_op(x_var, *args, **kwargs) +
+            self._wrapped_lin_op(x_var, *args, **kwds) +
             self._wrapped_vector
         )
         if self._residual_tracking:
@@ -297,15 +313,24 @@ class PolyakStep(OptimizerStep):
         )
         self.mm_step = MomentumStep(momentum, strategy=MomentumType.Polyak)
         self._x_prev = None
+    
+    def _transition(
+        self,
+        x_curr: FlatVar,
+        x_prev: FlatVar,
+        *args: Any,
+        **kwds: Any,
+    ) -> FlatVar:
+        x_gd = self.gd_step(x_curr, *args, **kwds)
+        z_curr = PairVar(x_curr, x_prev)
+        return x_gd + self.mm_step(z_curr).first
 
     @ensure_flat_input
-    def step(self, x_curr: FlatVar, *args: Any, **kwargs: Any) -> FlatVar:
-        x_new = self.gd_step(x_curr, *args, **kwargs)
-        if self._x_prev is not None:
-            z_curr = PairVar(x_curr, self._x_prev)
-            x_new = x_new + self.mm_step(z_curr).first
+    def step(self, x_curr: FlatVar, *args: Any, **kwds: Any) -> FlatVar:
+        x_prev = x_curr if self._x_prev is None else self._x_prev
+        x_next = self._transition(x_curr, x_prev, *args, **kwds)
         self._x_prev = x_curr
-        return x_new
+        return x_next
 
     @property
     def residual(self) -> FlatVarLike:
@@ -355,15 +380,23 @@ class NesterovStep(OptimizerStep):
             momentum=None, momentum_scheduler=momentum_scheduler
         )
         self._x_prev = None
+    
+    def _transition(
+        self,
+        x_curr: FlatVar,
+        x_prev: FlatVar,
+        *args: Any,
+        **kwds: Any,
+    ) -> FlatVar:
+        z_curr = PairVar(x_curr, x_prev)
+        return self.gd_step(self.mm_step(z_curr).first, *args, **kwds)
 
     @ensure_flat_input
-    def step(self, x_curr: FlatVar, *args: Any, **kwargs: Any) -> FlatVar:
-        if self._x_prev is None:
-            self._x_prev = x_curr
-        z_curr = PairVar(x_curr, self._x_prev)
-        x_new = self.gd_step(self.mm_step(z_curr).first, *args, **kwargs)
+    def step(self, x_curr: FlatVar, *args: Any, **kwds: Any) -> FlatVar:
+        x_prev = x_curr if self._x_prev is None else self._x_prev
+        x_next = self._transition(x_curr, x_prev, *args, **kwds)
         self._x_prev = x_curr
-        return x_new
+        return x_next
 
     @property
     def residual(self) -> FlatVarLike:
@@ -413,8 +446,8 @@ class ProxGradStep(OptimizerStep):
         self.prox_step = ProxStep(prox_map)
 
     @ensure_flat_input
-    def step(self, x_curr: FlatVar, *args: Any, **kwargs: Any) -> FlatVar:
-        x_new = self.prox_step(self.gd_step(x_curr, *args, **kwargs))
+    def step(self, x_curr: FlatVar, *args: Any, **kwds: Any) -> FlatVar:
+        x_new = self.prox_step(self.gd_step(x_curr, *args, **kwds))
         if self._residual_tracking:
             self._residual = x_new - x_curr
         return x_new
@@ -460,15 +493,23 @@ class FISTAStep(OptimizerStep):
             momentum=None, momentum_scheduler=momentum_scheduler
         )
         self._x_prev = None
+    
+    def _transition(
+        self,
+        x_curr: FlatVar,
+        x_prev: FlatVar,
+        *args: Any,
+        **kwds: Any,
+    ) -> FlatVar:
+        z_curr = PairVar(x_curr, x_prev)
+        return self.pgd_step(self.mm_step(z_curr).first, *args, **kwds)
 
     @ensure_flat_input
-    def step(self, x_curr: FlatVar, *args: Any, **kwargs: Any) -> FlatVar:
-        if self._x_prev is None:
-            self._x_prev = x_curr
-        z_curr = PairVar(x_curr, self._x_prev)
-        x_new = self.pgd_step(self.mm_step(z_curr).first, *args, **kwargs)
+    def step(self, x_curr: FlatVar, *args: Any, **kwds: Any) -> FlatVar:
+        x_prev = x_curr if self._x_prev is None else self._x_prev
+        x_next = self._transition(x_curr, x_prev, *args, **kwds)
         self._x_prev = x_curr
-        return x_new
+        return x_next
 
     @property
     def residual(self) -> FlatVarLike:
@@ -517,7 +558,7 @@ class PDHGPartialStep(OptimizerStep):
         lin_op: RawFlatLinOpType
     ) -> None:
         super().__init__(tracking=False)
-        self.stepsize = stepsize
+        self._stepsize = stepsize
         self.lin_op = lin_op
         self.prox_step = ProxStep(prox_map)
 
@@ -526,9 +567,9 @@ class PDHGPartialStep(OptimizerStep):
         inp_curr: FlatVarLike,
         oth_curr: FlatVarLike,
         *args: Any,
-        **kwargs: Any,
+        **kwds: Any,
     ) -> FlatVarLike:
-        return self.step(inp_curr, oth_curr, *args, **kwargs)
+        return self.step(inp_curr, oth_curr, *args, **kwds)
 
     @ensure_flat_input
     def step(
@@ -536,11 +577,11 @@ class PDHGPartialStep(OptimizerStep):
         inp_curr: FlatVar,
         oth_curr: FlatVarLike,
         *args: Any,
-        **kwargs: Any
+        **kwds: Any
     ) -> FlatVar:
         oth_var = as_flat_var(oth_curr)
         lin_out = self._wrapped_lin_op(oth_var)
-        return self.prox_step(inp_curr - self.stepsize * lin_out)
+        return self.prox_step(inp_curr - self._stepsize * lin_out)
 
     @property
     def lin_op(self) -> RawFlatLinOpType:
@@ -588,10 +629,10 @@ class PDHGStep(OptimizerStep):
         )
 
     @ensure_pair_input
-    def step(self, z_curr: PairVar, *args: Any, **kwargs: Any) -> PairVar:
-        x_prim = self.primal_step(z_curr.first, z_curr.second, *args, **kwargs)
+    def step(self, z_curr: PairVar, *args: Any, **kwds: Any) -> PairVar:
+        x_prim = self.primal_step(z_curr.first, z_curr.second, *args, **kwds)
         x_prim_mm = 2 * x_prim - z_curr.first
-        x_dual = self.dual_step(z_curr.second, -x_prim_mm, *args, **kwargs)
+        x_dual = self.dual_step(z_curr.second, -x_prim_mm, *args, **kwds)
         z_new = PairVar(x_prim, x_dual)
         if self._residual_tracking:
             self._residual = z_new - z_curr
