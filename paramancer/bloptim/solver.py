@@ -1,9 +1,11 @@
 from typing import Any
 
+from ..variable.flat import FlatVar
+from ..variable.pair import PairVar
 from ..variable.parameter import ParamBundle
 from ..variable.types import (
-    FlatRawVarType,
     IndexMapType,
+    OptVarType,
     ParamGradMapType,
     ParamLinOpType,
     ParamProxMapType,
@@ -12,6 +14,8 @@ from ..variable.types import (
     ScalarLike,
 )
 from ..variable.util import zeros_like
+from .implicit.backend import ImplicitBackend
+from .unrolled.backend import UnrolledBackend
 from .util import (
     Algorithm,
     create_optimizer,
@@ -20,42 +24,38 @@ from .util import (
     prepare_prox_maps,
 )
 
-Backend = {
-    "unrolled": ...,
-    "implicit": ...,
-}
-
-        
-
 
 class Solver:
     def __init__(
         self,
         backend: str,
         algorithm: Algorithm,
+        truncation: int = 0,
+        omega: float = 2,
         tol: float = 1e-6,
         iters: int = 100,
     ):
-        if backend not in Backend:
-            supported = ", ".join(Backend)
+        if backend not in {"unrolled", "implicit"}:
             raise ValueError(
                 f"Unsupported backend {backend!r}. "
-                f"Expected one of: {supported}."
+                f"Expected one of: unrolled, implicit."
             )
         if not isinstance(algorithm, Algorithm):
             raise TypeError("`algorithm` must be an `Algorithm`.")
-        if iters < 0:
-            raise ValueError("`iters` must be non-negative.")
-        if tol < 0:
-            raise ValueError("`tol` must be non-negative.")
+        if backend == "unrolled":
+            self._backend = UnrolledBackend(
+                truncation=truncation,
+                omega=omega,
+            )
+        else:
+            self._backend = ImplicitBackend()
         self._algorithm = algorithm
-        self._backend = backend
         self._tol = tol
         self._iters = iters
     
     def solve(
         self,
-        init: FlatRawVarType,
+        init: OptVarType,
         outer_vars: RawParamType,
         stepsize: ScalarLike,
         *args: Any,
@@ -69,7 +69,7 @@ class Solver:
         lin_op: ParamLinOpType | None = None,
         lin_op_adj: ParamLinOpType | None = None,
         **kwds: Any,
-    ) -> FlatRawVarType:
+    ) -> OptVarType:
         params = ParamBundle(outer_vars, outer_var_indices)
         grad_map, bound_grad_map = prepare_gradient(
             smooth_obj,
@@ -90,7 +90,7 @@ class Solver:
             params.dual,
             self._algorithm,
         )
-        
+
         (
             lin_op,
             lin_op_adj,
@@ -104,9 +104,9 @@ class Solver:
             self._algorithm,
         )
 
-        optimizer_init = init
+        optimizer_init = FlatVar(init)
         if bound_lin_op is not None:
-            optimizer_init = (init, zeros_like(bound_lin_op(init)))
+            optimizer_init = PairVar(init, zeros_like(bound_lin_op(init)))
 
         optimizer = create_optimizer(
             self._algorithm,
@@ -121,10 +121,18 @@ class Solver:
             tol=self._tol,
             iters=self._iters,
         )
-    
+
+        self._backend(
+            optimizer,
+            optimizer_init,
+            *args,
+            **kwds,
+        )
+        return self.solution
+
     def __call__(
         self,
-        init: FlatRawVarType,
+        init: OptVarType,
         outer_vars: RawParamType,
         stepsize: ScalarLike,
         *args: Any,
@@ -138,7 +146,7 @@ class Solver:
         lin_op: ParamLinOpType | None = None,
         lin_op_adj: ParamLinOpType | None = None,
         **kwds: Any,
-    ) -> FlatRawVarType:
+    ) -> OptVarType:
         return self.solve(
             init=init,
             outer_vars=outer_vars,
@@ -154,4 +162,13 @@ class Solver:
             lin_op=lin_op,
             lin_op_adj=lin_op_adj,
             **kwds,
+        )
+
+    @property
+    def solution(self) -> OptVarType:
+        sol = self._backend._fwd_sol
+        return (
+            sol.first.data
+            if hasattr(sol, "first")
+            else sol.data
         )
