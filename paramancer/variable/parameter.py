@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 from ._mixins import FlattenMixin, TensorOpsMixin, flat_binary
-from .types import IndexMapType, RawParamType, ParamBundleLike
+from .types import (
+    FlattendType,
+    IndexMapType,
+    ParamBundleLike,
+    PSpecType,
+    RawParamType,
+)
 from .util import is_param_bundle
 
 
@@ -28,6 +34,15 @@ class ParamBundle(TensorOpsMixin, FlattenMixin):
     @data.setter
     def data(self, new_data: RawParamType):
         self._data = new_data
+
+    @classmethod
+    def unflatten(
+        cls,
+        flat: FlattendType,
+        spec: PSpecType,
+        indices: IndexMapType | None = None,
+    ) -> ParamBundle:
+        return cls(cls._unflatten_fn(flat, spec), indices)
 
     def takes_params(self, key: str) -> bool:
         return key in self._indices and (

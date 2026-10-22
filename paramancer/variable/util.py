@@ -104,9 +104,13 @@ def flatten_pair_raw(data: PairRawVarType) -> tuple[FlattendType, PairSpec]:
         raise TypeError(
             "Unsupported pair raw variable. Expected pair of flat raw variables."
         )
-    first_flat, _ = flatten_flat_raw(data[0])
-    second_flat, _ = flatten_flat_raw(data[1])
-    return (*first_flat, *second_flat), ("pair", len(first_flat), len(second_flat))
+    first_flat, first_spec = flatten_flat_raw(data[0])
+    second_flat, second_spec = flatten_flat_raw(data[1])
+    return (*first_flat, *second_flat), (
+        "pair",
+        first_spec,
+        second_spec,
+    )
 
 
 def flatten_raw(data) -> tuple[FlattendType, VSpecType]:
@@ -139,7 +143,9 @@ def unflatten_flat_raw(
 def unflatten_pair_raw(flat: FlattendType, spec: PairSpec) -> PairRawVarType:
     if spec[0] != "pair":
         raise TypeError(f"Unsupported pair spec {spec}.")
-    n_first, n_second = spec[1], spec[2]
+    first_spec, second_spec = spec[1], spec[2]
+    n_first = 1 if first_spec[0] == "tensor" else first_spec[1]
+    n_second = 1 if second_spec[0] == "tensor" else second_spec[1]
     if len(flat) != n_first + n_second:
         raise ValueError(
             f"Spec {spec} expects {n_first + n_second} tensors, got "
@@ -147,12 +153,8 @@ def unflatten_pair_raw(flat: FlattendType, spec: PairSpec) -> PairRawVarType:
         )
     first = tuple(flat[:n_first])
     second = tuple(flat[n_first : n_first + n_second])
-    first_raw = unflatten_flat_raw(
-        first, ("tensor",) if n_first == 1 else ("tuple", n_first)
-    )
-    second_raw = unflatten_flat_raw(
-        second, ("tensor",) if n_second == 1 else ("tuple", n_second)
-    )
+    first_raw = unflatten_flat_raw(first, first_spec)
+    second_raw = unflatten_flat_raw(second, second_spec)
     return first_raw, second_raw
 
 

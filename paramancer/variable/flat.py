@@ -8,7 +8,7 @@ from ._mixins import (
     scale_flat,
     to_tuple,
 )
-from .types import FlatVarLike, FlatRawVarType, ScalarLike
+from .types import FlatRawVarType, FlatVarLike, ScalarLike
 from .util import as_flat_var, is_flat_raw_var, is_flat_var
 
 

@@ -73,8 +73,10 @@ StepsizeSchedType: TypeAlias = MomentumSchedType | LineSearchSchedType
 FlattendType: TypeAlias = tuple[Tensor, ...]
 TensorSpec: TypeAlias = tuple[Literal["tensor"]]
 TupleSpec: TypeAlias = tuple[Literal["tuple"], int]
-PairSpec: TypeAlias = tuple[Literal["pair"], int, int]
 FlatSpecType: TypeAlias = TensorSpec | TupleSpec
+PairSpec: TypeAlias = tuple[
+    Literal["pair"], FlatSpecType, FlatSpecType
+]
 VSpecType: TypeAlias = FlatSpecType | PairSpec
 PSpecType: TypeAlias = FlatSpecType
 
