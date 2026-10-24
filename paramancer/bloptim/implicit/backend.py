@@ -1,9 +1,15 @@
-from ...optim.optimizer import Optimizer
+from collections.abc import Callable
+
+import torch
+
+from ...optim.optimizer import NeumannSeries, Optimizer
 from ...optim.step import OptimizerStep
 from ...variable import (
     AlgoVar,
     FlattendType,
     IndexMapType,
+    LinOpType,
+    MetricSpec,
     ParamBundle,
     ParamGradMapType,
     ParamLinOpType,
@@ -102,11 +108,122 @@ def prepare_flat_param_step(
     def flattened_parameterized_markovian_step(
         z_flat: FlattendType,
         u_flat: FlattendType,
-    ):
+    ) -> FlattendType:
         z = z_wrapper_type.unflatten(z_flat, z_spec)
         u = ParamBundle.unflatten(u_flat, u_spec, u_indices)
         return parameterized_markovian_step(z, u, *args, **kwds).flatten()[0]
     return flattened_parameterized_markovian_step
+
+
+def neumann_series(
+    lin_op: LinOpType,
+    vector: AlgoVar,
+    init: AlgoVar | None = None,
+    tol: float = 1e-5,
+    iters: int = 100,
+    metric: MetricSpec | None = None,
+    store_history: bool = False,
+    verbose: bool = False,
+):
+    neumann = NeumannSeries(
+        lin_op, vector, tol, iters, metric, store_history, verbose
+    )
+    return neumann(init=init)
+
+
+class VJP:
+    def __init__(
+        self,
+        param_step: Callable[[AlgoVar, ParamBundle, ...], AlgoVar],
+        tol: float = 1e-5,
+        iters: int = 100,
+        metric: MetricSpec | None = None,
+        verbose: bool = False,
+    ):
+        self._param_step = param_step
+        self.tol = tol
+        self.iters = iters
+        self.metric = metric
+        self.verbose = verbose
+        self._adjoint: AlgoVar | None = None
+
+    def __call__(
+        self,
+        z_root: AlgoVar,
+        u_given: ParamBundle,
+        z_grad: AlgoVar,
+        init: AlgoVar | None = None,
+        *args,
+        **kwds,
+    ) -> ParamBundle:
+        specs = self._create_pullback(z_root, u_given, *args, **kwds)
+        vjp_var = lambda z_grad: self._call_pullback(z_grad, *specs)[0]
+        vjp_par = lambda z_grad: self._call_pullback(z_grad, *specs)[1]
+
+        self._adjoint = neumann_series(
+            vjp_var,
+            z_grad,
+            init=init,
+            tol=self.tol,
+            iters=self.iters,
+            metric=self.metric,
+            verbose=self.verbose,
+        )
+        return vjp_par(self._adjoint)
+
+    def _call_pullback(
+        self,
+        z_grad: AlgoVar,
+        pullback: Callable[
+            [FlattendType], tuple[FlattendType, FlattendType]
+        ],
+        z_spec: VSpecType,
+        z_wrapper_type: type[FlatVar] | type[PairVar],
+        u_spec: PSpecType,
+        u_indices: IndexMapType,
+    ) -> tuple[AlgoVar, ParamBundle]:
+        zg_flat, _ = z_grad.flatten()
+        zrg_flat, ug_flat = pullback(zg_flat)
+        zr_grad = z_wrapper_type.unflatten(zrg_flat, z_spec)
+        u_grad = ParamBundle.unflatten(ug_flat, u_spec, u_indices)
+        return zr_grad, u_grad
+
+    def _create_pullback(
+        self,
+        z_root: AlgoVar,
+        u_given: ParamBundle,
+        *args,
+        **kwds,
+    ) -> tuple[
+        Callable[[FlattendType], tuple[FlattendType, FlattendType]],
+        VSpecType,
+        type[FlatVar] | type[PairVar],
+        PSpecType,
+        IndexMapType,
+    ]:
+        z_flat, z_spec = z_root.flatten()
+        z_wrapper_type = type(z_root)
+        u_flat, u_spec = u_given.flatten()
+        u_indices = u_given.indices
+        flat_param_step = prepare_flat_param_step(
+            self._param_step,
+            z_spec,
+            z_wrapper_type,
+            u_spec,
+            u_indices,
+            *args,
+            **kwds,
+        )
+        pullback = torch.func.vjp(flat_param_step, z_flat, u_flat)[1]
+        return pullback, z_spec, z_wrapper_type, u_spec, u_indices
+
+    @property
+    def adjoint_state(self) -> AlgoVar:
+        if self._adjoint is None:
+            raise RuntimeError(
+                "Adjoint state accessed before implicit differentiation ran."
+            )
+        return self._adjoint
 
 
 class ImplicitBackend:
