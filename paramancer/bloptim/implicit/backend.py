@@ -1,4 +1,6 @@
 from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Concatenate, ParamSpec, TypeAlias
 
 import torch
 
@@ -20,8 +22,25 @@ from ...variable import (
 from ...variable.flat import FlatVar
 from ...variable.pair import PairVar
 
+P = ParamSpec("P")
+FlatStep: TypeAlias = Callable[Concatenate[FlatVar, P], FlatVar]
+PairStep: TypeAlias = Callable[Concatenate[PairVar, P], PairVar]
+MarkovStep: TypeAlias = FlatStep | PairStep
 
-def markovify(step: OptimizerStep):
+ParamFlatStep: TypeAlias = Callable[
+    Concatenate[FlatVar, ParamBundle, P], FlatVar
+]
+ParamPairStep: TypeAlias = Callable[
+    Concatenate[PairVar, ParamBundle, P], PairVar
+]
+ParamMarkovStep: TypeAlias = ParamFlatStep | ParamPairStep
+
+FlattenedParamStep: TypeAlias = Callable[
+    [FlattendType, FlattendType], FlattendType
+]
+
+
+def markovify(step: OptimizerStep) -> MarkovStep:
     if step.is_markovian():
         return step
     def markovian_step(z_curr: PairVar, *args, **kwds) -> PairVar:
@@ -36,14 +55,14 @@ def markovify(step: OptimizerStep):
 
 
 def parameterize(
-    markovian_step,
+    markovian_step: MarkovStep,
     optim_step: OptimizerStep,
     grad_map: ParamGradMapType | None,
     prox_map: ParamProxMapType | None,
     prox_map_dual: ParamProxMapType | None,
     lin_op: ParamLinOpType | None,
     lin_op_adj: ParamLinOpType | None,
-):    
+) -> ParamMarkovStep:    
     def parameterized_step(
         z_curr: AlgoVar, outer_vars: ParamBundle, *args, **kwds
     ) -> AlgoVar:
@@ -97,14 +116,14 @@ def parameterize(
 
 
 def prepare_flat_param_step(
-    parameterized_markovian_step,
+    parameterized_markovian_step: ParamMarkovStep,
     z_spec: VSpecType,
     z_wrapper_type: type[FlatVar] | type[PairVar],
     u_spec: PSpecType,
     u_indices: IndexMapType,
     *args,
     **kwds,
-):
+) -> FlattenedParamStep:
     def flattened_parameterized_markovian_step(
         z_flat: FlattendType,
         u_flat: FlattendType,
@@ -134,7 +153,7 @@ def neumann_series(
 class VJP:
     def __init__(
         self,
-        param_step: Callable[[AlgoVar, ParamBundle, ...], AlgoVar],
+        param_step: ParamMarkovStep,
         tol: float = 1e-5,
         iters: int = 100,
         metric: MetricSpec | None = None,
@@ -224,6 +243,191 @@ class VJP:
                 "Adjoint state accessed before implicit differentiation ran."
             )
         return self._adjoint
+
+
+def _flat_len(spec: PSpecType | VSpecType) -> int:
+    if spec[0] == "tensor":
+        return 1
+    if spec[0] == "tuple":
+        return spec[1]
+    if spec[0] == "pair":
+        return _flat_len(spec[1]) + _flat_len(spec[2])
+    raise TypeError(f"Unsupported spec {spec}.")
+
+
+def _split_flat_args(
+    flat_args: tuple[torch.Tensor, ...],
+    u_spec: PSpecType,
+    z_spec: VSpecType,
+    is_markovian: bool,
+) -> tuple[FlattendType, FlattendType, FlattendType | None]:
+    num_u = _flat_len(u_spec)
+    num_z = _flat_len(z_spec)
+    num_z_adj = num_z if is_markovian else 2 * num_z
+    base_count = num_u + num_z
+    total_count = len(flat_args)
+
+    if total_count == base_count:
+        has_z_adj_init = False
+    elif total_count == base_count + num_z_adj:
+        has_z_adj_init = True
+    else:
+        raise ValueError(
+            "Expected flattened inputs to contain parameter tensors, initial "
+            "state tensors, and optionally adjoint-initialization tensors."
+        )
+
+    u_given_fl = flat_args[:num_u]
+    z_init_fl = flat_args[num_u:base_count]
+    z_adj_init_fl = flat_args[base_count:] if has_z_adj_init else None
+    return u_given_fl, z_init_fl, z_adj_init_fl
+
+def lift_fixed_point(x_root: AlgoVar, is_markovian: bool) -> AlgoVar:
+    return x_root if is_markovian else PairVar(x_root, x_root)
+
+def lift_output_gradient(x_grad: AlgoVar, is_markovian: bool) -> AlgoVar:
+    return x_grad if is_markovian else PairVar(x_grad, x_grad.zeros_like())
+
+
+@dataclass
+class AdjointStateCache:
+    value: AlgoVar | None = None
+
+
+class OptimizerID(torch.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        step: OptimizerStep,
+        grad_map: ParamGradMapType | None,
+        prox_map: ParamProxMapType | None,
+        prox_map_dual: ParamProxMapType | None,
+        lin_op: ParamLinOpType | None,
+        lin_op_adj: ParamLinOpType | None,
+        u_spec: PSpecType,
+        u_indices: IndexMapType,
+        z_spec: VSpecType,
+        z_wrapper_type: type[FlatVar] | type[PairVar],
+        call_args: tuple,
+        call_kwargs: dict,
+        tol: float,
+        iters: int,
+        metric: MetricSpec | None,
+        verbose: bool,
+        adjoint_cache: AdjointStateCache | None,
+        *flat_args: torch.Tensor,
+    ) -> tuple[torch.Tensor, ...] | torch.Tensor:
+        u_given_fl, z_init_fl, z_adj_init_fl = _split_flat_args(
+            flat_args, u_spec, z_spec, step.is_markovian()
+        )
+        z_init = z_wrapper_type.unflatten(z_init_fl, z_spec)
+        optimizer = Optimizer(
+            step, tol=tol, iters=iters, metric=metric, verbose=verbose
+        )
+        z_min = optimizer(z_init, *call_args, **call_kwargs)
+        z_min_fl, _ = z_min.flatten()
+
+        tensors_to_save = [*z_min_fl, *u_given_fl]
+        if z_adj_init_fl is not None:
+            tensors_to_save.extend(z_adj_init_fl)
+        ctx.save_for_backward(*tensors_to_save)
+        ctx.step = step
+        ctx.grad_map = grad_map
+        ctx.prox_map = prox_map
+        ctx.prox_map_dual = prox_map_dual
+        ctx.lin_op = lin_op
+        ctx.lin_op_adj = lin_op_adj
+        ctx.u_spec = u_spec
+        ctx.u_indices = u_indices
+        ctx.z_spec = z_spec
+        ctx.z_wrapper_type = z_wrapper_type
+        ctx.call_args = call_args
+        ctx.call_kwargs = call_kwargs
+        ctx.tol = tol
+        ctx.iters = iters
+        ctx.metric = metric
+        ctx.verbose = verbose
+        ctx.has_z_adj_init = z_adj_init_fl is not None
+        ctx.adjoint_cache = adjoint_cache
+
+        return z_min_fl[0] if len(z_min_fl) == 1 else z_min_fl
+
+    @staticmethod
+    def backward(ctx, *z_grad_fl):
+        z_spec = ctx.z_spec
+        num_u = _flat_len(ctx.u_spec)
+        num_z = _flat_len(z_spec)
+        is_markovian = ctx.step.is_markovian()
+        z_adj_spec = z_spec if is_markovian else ("pair", z_spec, z_spec)
+        z_adj_wrapper = ctx.z_wrapper_type if is_markovian else PairVar
+        num_z_adj = num_z if is_markovian else 2 * num_z
+        
+        u_given = ParamBundle.unflatten(
+            ctx.saved_tensors[num_z : num_z + num_u],
+            ctx.u_spec,
+            ctx.u_indices,
+        )
+        z_root = ctx.z_wrapper_type.unflatten(
+            ctx.saved_tensors[:num_z],
+            z_spec,
+        )
+        z_grad = ctx.z_wrapper_type.unflatten(z_grad_fl, z_spec)
+        z_adj_init = (
+            z_adj_wrapper.unflatten(
+                ctx.saved_tensors[num_z + num_u :],
+                z_adj_spec,
+            )
+            if ctx.has_z_adj_init
+            else None
+        )
+        
+        z_root_lifted = lift_fixed_point(z_root, is_markovian)
+        z_grad_lifted = lift_output_gradient(z_grad, is_markovian)
+        
+        grad_map = ctx.grad_map
+        prox_map = ctx.prox_map
+        prox_map_dual = ctx.prox_map_dual
+        lin_op = ctx.lin_op
+        lin_op_adj = ctx.lin_op_adj
+        m_step = markovify(ctx.step)
+        pm_step = parameterize(
+            m_step,
+            ctx.step,
+            grad_map,
+            prox_map,
+            prox_map_dual,
+            lin_op,
+            lin_op_adj
+        )
+        
+        vjp = VJP(
+            pm_step,
+            tol=ctx.tol,
+            iters=ctx.iters,
+            metric=ctx.metric,
+            verbose=ctx.verbose,
+        )
+        u_grad_fl, _ = vjp(
+            z_root_lifted,
+            u_given,
+            z_grad_lifted,
+            z_adj_init,
+            *ctx.call_args,
+            **ctx.call_kwargs,
+        ).flatten()
+        if ctx.adjoint_cache is not None:
+            ctx.adjoint_cache.value = vjp.adjoint_state
+
+        metadata_grads = (None,) * 17
+        z_init_grads = (None,) * num_z
+        z_adj_init_grads = (None,) * num_z_adj if ctx.has_z_adj_init else ()
+        return (
+            *metadata_grads,
+            *u_grad_fl,
+            *z_init_grads,
+            *z_adj_init_grads,
+        )
+
 
 
 class ImplicitBackend:
