@@ -38,8 +38,8 @@ class BaseLearner:
         features: torch.Tensor,
         targets: torch.Tensor,
         wb_init: BaseLearnerParamType | None = None,
-        adjoint_init: BaseLearnerAdjointType | None = None,
         *,
+        adjoint_init: BaseLearnerAdjointType | None = None,
         stepsize: ScalarLike | None = None,
         **solver_kwargs: Any,
     ) -> None:

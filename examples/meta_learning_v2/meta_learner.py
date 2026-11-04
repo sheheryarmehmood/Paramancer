@@ -41,7 +41,7 @@ class MetaLearner(torch.nn.Module):
             support_feats,
             support_targets,
             initial_params,
-            adjoint_init,
+            adjoint_init=adjoint_init,
             stepsize=stepsize,
             **solver_kwargs,
         )
