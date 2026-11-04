@@ -56,6 +56,10 @@ class Solver:
         self._algorithm = algorithm
         self._tol = tol
         self._iters = iters
+
+    @property
+    def algorithm(self) -> Algorithm:
+        return self._algorithm
     
     def solve(
         self,

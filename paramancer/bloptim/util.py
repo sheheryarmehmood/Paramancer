@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import math
 from enum import Enum
+from numbers import Real
 from typing import TypeVar
+
+import torch
 
 from ..operators.grad import gradient
 from ..operators.linalg import adjoint
@@ -135,6 +139,80 @@ def requires_prox_map(algorithm: Algorithm) -> bool:
 
 def requires_lin_op(algorithm: Algorithm) -> bool:
     return algorithm == Algorithm.PDHG
+
+def requires_momentum(algorithm: Algorithm) -> bool:
+    return algorithm == Algorithm.HB
+
+
+def optimal_algorithm_parameters(
+    algorithm: Algorithm,
+    lipschitz: ScalarLike,
+    strong_convexity: ScalarLike,
+) -> tuple[ScalarLike, ScalarLike | None]:
+    """Return classical parameters from smooth strongly-convex bounds."""
+    _validate_problem_constant(lipschitz, "lipschitz", positive=True)
+    _validate_problem_constant(
+        strong_convexity,
+        "strong_convexity",
+        positive=algorithm == Algorithm.HB,
+    )
+
+    if _as_float(strong_convexity) > _as_float(lipschitz):
+        raise ValueError("`strong_convexity` must not exceed `lipschitz`.")
+
+    if algorithm == Algorithm.GD:
+        return 2 / (lipschitz + strong_convexity), None
+    if algorithm == Algorithm.HB:
+        sqrt_l = _sqrt(lipschitz)
+        sqrt_mu = _sqrt(strong_convexity)
+        denominator = sqrt_l + sqrt_mu
+        return (
+            4 / denominator**2,
+            ((sqrt_l - sqrt_mu) / denominator) ** 2,
+        )
+    if algorithm == Algorithm.NAG:
+        return 1 / lipschitz, None
+    if algorithm in {Algorithm.PGD, Algorithm.FISTA}:
+        return 1 / lipschitz, None
+    raise ValueError(
+        "Automatic parameters from `(L, mu)` are not available for PDHG."
+    )
+
+
+def _sqrt(value: ScalarLike) -> ScalarLike:
+    return (
+        value.sqrt()
+        if isinstance(value, torch.Tensor)
+        else math.sqrt(value)
+    )
+
+
+def _as_float(value: ScalarLike) -> float:
+    if isinstance(value, torch.Tensor):
+        return float(value.detach().item())
+    return float(value)
+
+
+def _validate_problem_constant(
+    value: ScalarLike,
+    name: str,
+    *,
+    positive: bool,
+) -> None:
+    if isinstance(value, torch.Tensor):
+        if value.numel() != 1:
+            raise ValueError(f"`{name}` must be scalar.")
+        scalar = float(value.detach().item())
+    elif isinstance(value, Real) and not isinstance(value, bool):
+        scalar = float(value)
+    else:
+        raise TypeError(f"`{name}` must be a real scalar or scalar tensor.")
+
+    lower_bound_violated = scalar <= 0 if positive else scalar < 0
+    if not math.isfinite(scalar) or lower_bound_violated:
+        qualifier = "positive" if positive else "non-negative"
+        raise ValueError(f"`{name}` must be finite and {qualifier}.")
+
 
 def bind_gradient(
     grad_map: ParamGradMapType,

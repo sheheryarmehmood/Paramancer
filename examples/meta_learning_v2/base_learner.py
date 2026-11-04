@@ -1,31 +1,51 @@
 from __future__ import annotations
 
+from typing import Any, TypeAlias
+
 import torch
 import torch.nn.functional as F
 
+from paramancer.bloptim.solver import Solver
+from paramancer.bloptim.util import (
+    optimal_algorithm_parameters,
+    requires_momentum,
+)
+from paramancer.variable.types import ScalarLike
+
+BaseLearnerParamType: TypeAlias = tuple[torch.Tensor, torch.Tensor]
+BaseLearnerParamPairType: TypeAlias = tuple[
+    BaseLearnerParamType, BaseLearnerParamType
+]
+BaseLearnerAdjointType: TypeAlias = (
+    BaseLearnerParamType | BaseLearnerParamPairType
+)
 
 
 class BaseLearner:
     def __init__(
         self,
-        solver,
+        solver: Solver,
         num_classes: int,
         reg_strength: float | torch.Tensor,
     ) -> None:
         self._solver = solver
-        self._wb = None
+        self._wb: BaseLearnerParamType | None = None
         self._num_classes = num_classes
-        self._reg_strength = reg_strength        # We can learn this later.
+        self._reg_strength = reg_strength
     
     def fit(
         self,
         features: torch.Tensor,
         targets: torch.Tensor,
-        wb_init: tuple[torch.Tensor, torch.Tensor] | None = None,
+        wb_init: BaseLearnerParamType | None = None,
+        adjoint_init: BaseLearnerAdjointType | None = None,
+        *,
+        stepsize: ScalarLike | None = None,
+        **solver_kwargs: Any,
     ) -> None:
         if wb_init is not None:
             self._wb = tuple(
-                tensor.detach().detach().to(
+                tensor.detach().to(
                     device=features.device,
                     dtype=features.dtype,
                 ) for tensor in wb_init
@@ -46,14 +66,61 @@ class BaseLearner:
             )
             self._wb = (weight, bias)
         
-        # This is to be dissected later.
+        momentum = solver_kwargs.get("momentum")
+        needs_momentum = requires_momentum(self._solver.algorithm)
+        if stepsize is None or (needs_momentum and momentum is None):
+            lipschitz, strong_convexity = self._problem_constants(features)
+            optimal_stepsize, optimal_momentum = optimal_algorithm_parameters(
+                self._solver.algorithm,
+                lipschitz,
+                strong_convexity,
+            )
+            if stepsize is None:
+                stepsize = optimal_stepsize
+            if needs_momentum and momentum is None:
+                solver_kwargs["momentum"] = optimal_momentum
+
         self._wb = self._solver(
-            init=self._wb,          # The first input. Should allow the solver to identify the inner optimization variable.
-            outer_vars=(features,), # The second input. Should allow the solver to identify the outer optimization 
-            args=(targets,),        # Part of `*args` to be passed to `obj_map` or `grad_map`.
-            obj_map=self._loss,     # `obj_map` xor `grad_map` should be passed to the solver.
-            # `solver` could also support `*kwds`. Not needed here, I guess.
+            self._wb,
+            features,
+            stepsize,
+            targets,
+            smooth_obj=self._loss,
+            adjoint_init=adjoint_init,
+            **solver_kwargs,
         )
+
+    def _problem_constants(
+        self,
+        features: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        if features.ndim != 3:
+            raise ValueError(
+                "`features` must have shape (meta_batch, samples, features)."
+            )
+
+        with torch.no_grad():
+            regularization = torch.as_tensor(
+                self._reg_strength,
+                device=features.device,
+                dtype=features.dtype,
+            )
+            if regularization.numel() != 1 or regularization.item() <= 0:
+                raise ValueError("`reg_strength` must be a positive scalar.")
+
+            ones = features.new_ones((*features.shape[:-1], 1))
+            augmented_features = torch.cat((features.detach(), ones), dim=-1)
+            spectral_norms = torch.linalg.matrix_norm(
+                augmented_features,
+                ord=2,
+            )
+            data_lipschitz = (
+                spectral_norms.square() / (2 * features.shape[1])
+            )
+            lipschitz = (data_lipschitz + regularization).max()
+            strong_convexity = regularization
+
+        return lipschitz, strong_convexity
     
     def predict(
         self,
@@ -68,12 +135,15 @@ class BaseLearner:
     
     def _loss(
         self,
-        wb_curr: tuple[torch.Tensor, torch.Tensor],
+        wb_curr: BaseLearnerParamType,
         features,
         targets,
     ) -> torch.Tensor:
         logits = self._predict(features, wb_curr)
-        reg_term = self._reg_strength * wb_curr[0].square().sum() / 2
+        weight, bias = wb_curr
+        reg_term = self._reg_strength * (
+            weight.square().sum() + bias.square().sum()
+        ) / 2
         return F.cross_entropy(
             logits.flatten(0, 1),
             targets.long().flatten(),
@@ -83,14 +153,18 @@ class BaseLearner:
     def _predict(
         self,
         features: torch.Tensor,
-        wb_curr: tuple[torch.Tensor, torch.Tensor],
+        wb_curr: BaseLearnerParamType,
     ) -> torch.Tensor:
         W, b = wb_curr
         return torch.einsum("bse,bce->bsc", features, W) + b[:, None, :]
     
     @property
-    def wb_opt(self) -> tuple[torch.Tensor, torch.Tensor]:
+    def wb_opt(self) -> BaseLearnerParamType:
         if self._wb is None:
             raise RuntimeError("No solution is available before fit().")
         
         return tuple(w.detach() for w in self._wb)
+
+    @property
+    def adjoint_state(self) -> BaseLearnerAdjointType:
+        return self._solver.adjoint_state

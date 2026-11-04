@@ -2,11 +2,39 @@ import pytest
 import torch
 
 from paramancer.bloptim.solver import Solver
-from paramancer.bloptim.util import Algorithm
+from paramancer.bloptim.util import Algorithm, optimal_algorithm_parameters
 
 
 def quadratic_grad(x, target):
     return x - target
+
+
+def test_optimal_algorithm_parameters():
+    lipschitz = torch.tensor(9.0)
+    strong_convexity = torch.tensor(1.0)
+
+    gd_step, gd_momentum = optimal_algorithm_parameters(
+        Algorithm.GD,
+        lipschitz,
+        strong_convexity,
+    )
+    hb_step, hb_momentum = optimal_algorithm_parameters(
+        Algorithm.HB,
+        lipschitz,
+        strong_convexity,
+    )
+    nag_step, nag_momentum = optimal_algorithm_parameters(
+        Algorithm.NAG,
+        lipschitz,
+        strong_convexity,
+    )
+
+    assert torch.allclose(gd_step, torch.tensor(0.2))
+    assert gd_momentum is None
+    assert torch.allclose(hb_step, torch.tensor(0.25))
+    assert torch.allclose(hb_momentum, torch.tensor(0.25))
+    assert torch.allclose(nag_step, torch.tensor(1 / 9))
+    assert nag_momentum is None
 
 
 @pytest.mark.parametrize("backend", ["unrolled", "implicit"])
