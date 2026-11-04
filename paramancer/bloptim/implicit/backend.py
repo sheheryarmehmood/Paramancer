@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Concatenate, ParamSpec, TypeAlias
+from typing import Any, Concatenate, ParamSpec, TypeAlias
 
 import torch
 
@@ -8,6 +10,7 @@ from ...optim.optimizer import NeumannSeries, Optimizer
 from ...optim.step import OptimizerStep
 from ...variable import (
     AlgoVar,
+    AlgoVarLike,
     FlattendType,
     IndexMapType,
     LinOpType,
@@ -314,7 +317,7 @@ class OptimizerID(torch.autograd.Function):
         iters: int,
         metric: MetricSpec | None,
         verbose: bool,
-        adjoint_cache: AdjointStateCache | None,
+        adjoint_cache: AdjointStateCache,
         *flat_args: torch.Tensor,
     ) -> tuple[torch.Tensor, ...] | torch.Tensor:
         u_given_fl, z_init_fl, z_adj_init_fl = _split_flat_args(
@@ -400,23 +403,35 @@ class OptimizerID(torch.autograd.Function):
             lin_op_adj
         )
         
-        vjp = VJP(
-            pm_step,
-            tol=ctx.tol,
-            iters=ctx.iters,
-            metric=ctx.metric,
-            verbose=ctx.verbose,
+        momentum_step = getattr(ctx.step, "mm_step", None)
+        momentum_scheduler = (
+            momentum_step.momentum_scheduler
+            if momentum_step is not None
+            else None
         )
-        u_grad_fl, _ = vjp(
-            z_root_lifted,
-            u_given,
-            z_grad_lifted,
-            z_adj_init,
-            *ctx.call_args,
-            **ctx.call_kwargs,
-        ).flatten()
-        if ctx.adjoint_cache is not None:
+        if momentum_step is not None:
+            momentum_step.momentum_scheduler = None
+
+        try:
+            vjp = VJP(
+                pm_step,
+                tol=ctx.tol,
+                iters=ctx.iters,
+                metric=ctx.metric,
+                verbose=ctx.verbose,
+            )
+            u_grad_fl, _ = vjp(
+                z_root_lifted,
+                u_given,
+                z_grad_lifted,
+                z_adj_init,
+                *ctx.call_args,
+                **ctx.call_kwargs,
+            ).flatten()
             ctx.adjoint_cache.value = vjp.adjoint_state
+        finally:
+            if momentum_step is not None:
+                momentum_step.momentum_scheduler = momentum_scheduler
 
         metadata_grads = (None,) * 17
         z_init_grads = (None,) * num_z
@@ -431,35 +446,92 @@ class OptimizerID(torch.autograd.Function):
 
 
 class ImplicitBackend:
-    def __init__(
+    def __init__(self) -> None:
+        self._fwd_sol: AlgoVar | None = None
+        self._adjoint_cache = AdjointStateCache()
+
+    def __call__(
         self,
         optimizer: Optimizer,
         init: AlgoVar,
         outer_vars: ParamBundle,
+        *args: Any,
         grad_map: ParamGradMapType | None = None,
         prox_map: ParamProxMapType | None = None,
+        prox_map_dual: ParamProxMapType | None = None,
         lin_op: ParamLinOpType | None = None,
         lin_op_adj: ParamLinOpType | None = None,
-    ):
-        self._optimizer = optimizer
-        self._outer_vars = outer_vars
-        self._grad_map = grad_map
-        self._prox_map = prox_map
-        self._lin_op = lin_op
-        self._lin_op_adj = lin_op_adj
-    
-    def __call__(
-        self,
+        adjoint_init: AlgoVarLike | None = None,
+        **kwds: Any,
+    ) -> AlgoVar:
+        self._fwd_sol = None
+        self._adjoint_cache.value = None
+
+        u_flat, u_spec = outer_vars.flatten()
+        z_init_flat, z_spec = init.flatten()
+        z_adj_init_flat = self._flatten_adjoint_init(
+            adjoint_init,
+            init,
+            optimizer.step.is_markovian(),
+        )
+
+        z_min_flat = OptimizerID.apply(
+            optimizer.step,
+            grad_map,
+            prox_map,
+            prox_map_dual,
+            lin_op,
+            lin_op_adj,
+            u_spec,
+            outer_vars.indices,
+            z_spec,
+            type(init),
+            args,
+            kwds,
+            optimizer.tol,
+            optimizer.iters,
+            optimizer.metric,
+            optimizer.verbose,
+            self._adjoint_cache,
+            *u_flat,
+            *z_init_flat,
+            *z_adj_init_flat,
+        )
+        if isinstance(z_min_flat, torch.Tensor):
+            z_min_flat = (z_min_flat,)
+
+        self._fwd_sol = type(init).unflatten(z_min_flat, z_spec)
+        return self._fwd_sol
+
+    @staticmethod
+    def _flatten_adjoint_init(
+        adjoint_init: AlgoVarLike | None,
         init: AlgoVar,
-        *args,
-        **kwds,
-    ):
-        if self._grad_map is None:
-            self._optimizer.step.grad_map = self._grad_map
-        if self._prox_map is None:
-            self._optimizer.step.prox_map = self._prox_map
-        if self._lin_op is None:
-            self._optimizer.step.replace_lin_op(
-                self._lin_op,
-                self._lin_op_adj,
+        is_markovian: bool,
+    ) -> FlattendType:
+        if adjoint_init is None:
+            return ()
+
+        expected_type = type(init) if is_markovian else PairVar
+        adjoint_var = (
+            adjoint_init
+            if isinstance(adjoint_init, expected_type)
+            else expected_type(adjoint_init)
+        )
+        return adjoint_var.flatten()[0]
+
+    @property
+    def fwd_sol(self) -> AlgoVar:
+        if self._fwd_sol is None:
+            raise RuntimeError(
+                "Forward solution accessed before the backend was called."
             )
+        return self._fwd_sol
+
+    @property
+    def adjoint_state(self) -> AlgoVar:
+        if self._adjoint_cache.value is None:
+            raise RuntimeError(
+                "Adjoint state accessed before any backward pass ran."
+            )
+        return self._adjoint_cache.value
