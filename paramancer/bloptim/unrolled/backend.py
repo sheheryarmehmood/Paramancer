@@ -22,7 +22,7 @@ class UnrolledBackend:
         if isinstance(omega, bool) or not isinstance(omega, Real):
             raise TypeError("`omega` must be a real number.")
         if not 2 <= omega <= 4:
-            raise ValueError("`omega` must lie in the interval [1, 4].")
+            raise ValueError("`omega` must lie in the interval [2, 4].")
 
         self._truncation = truncation
         self._omega = float(omega)

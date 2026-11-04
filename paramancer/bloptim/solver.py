@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 from typing import Any
 
 from ..variable.flat import FlatVar
 from ..variable.pair import PairVar
 from ..variable.parameter import ParamBundle
 from ..variable.types import (
+    AlgoVarLike,
+    AlgoVarType,
     IndexMapType,
     OptVarType,
     ParamGradMapType,
@@ -68,6 +72,7 @@ class Solver:
         prox_map_dual: ParamProxMapType | None = None,
         lin_op: ParamLinOpType | None = None,
         lin_op_adj: ParamLinOpType | None = None,
+        adjoint_init: AlgoVarLike | None = None,
         **kwds: Any,
     ) -> OptVarType:
         params = ParamBundle(outer_vars, outer_var_indices)
@@ -122,12 +127,31 @@ class Solver:
             iters=self._iters,
         )
 
-        self._backend(
-            optimizer,
-            optimizer_init,
-            *args,
-            **kwds,
-        )
+        if isinstance(self._backend, ImplicitBackend):
+            self._backend(
+                optimizer,
+                optimizer_init,
+                params,
+                *args,
+                grad_map=grad_map,
+                prox_map=prox_map,
+                prox_map_dual=prox_map_dual,
+                lin_op=lin_op,
+                lin_op_adj=lin_op_adj,
+                adjoint_init=adjoint_init,
+                **kwds,
+            )
+        else:
+            if adjoint_init is not None:
+                raise ValueError(
+                    "`adjoint_init` is only supported by the implicit backend."
+                )
+            self._backend(
+                optimizer,
+                optimizer_init,
+                *args,
+                **kwds,
+            )
         return self.solution
 
     def __call__(
@@ -145,12 +169,13 @@ class Solver:
         prox_map_dual: ParamProxMapType | None = None,
         lin_op: ParamLinOpType | None = None,
         lin_op_adj: ParamLinOpType | None = None,
+        adjoint_init: AlgoVarLike | None = None,
         **kwds: Any,
     ) -> OptVarType:
         return self.solve(
-            init=init,
-            outer_vars=outer_vars,
-            stepsize=stepsize,
+            init,
+            outer_vars,
+            stepsize,
             *args,
             outer_var_indices=outer_var_indices,
             momentum=momentum,
@@ -161,14 +186,23 @@ class Solver:
             prox_map_dual=prox_map_dual,
             lin_op=lin_op,
             lin_op_adj=lin_op_adj,
+            adjoint_init=adjoint_init,
             **kwds,
         )
 
     @property
     def solution(self) -> OptVarType:
-        sol = self._backend._fwd_sol
+        sol = self._backend.fwd_sol
         return (
             sol.first.data
             if hasattr(sol, "first")
             else sol.data
         )
+
+    @property
+    def adjoint_state(self) -> AlgoVarType:
+        if not isinstance(self._backend, ImplicitBackend):
+            raise TypeError(
+                "Adjoint state is only available with the implicit backend."
+            )
+        return self._backend.adjoint_state.data
