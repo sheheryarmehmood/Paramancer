@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import random
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,6 +19,7 @@ from .encoders import Conv2OmniEncoder
 from .episodes import EpisodeDataset
 from .initialization import ColdStart, ForwardWarmStart, StateStrategy
 from .meta_learner import MetaLearner
+from .reference import ReferenceEvaluator
 from .train import EpochMetrics, MetaTrain
 from .util import build_class_index
 
@@ -32,6 +34,8 @@ INNER_ITERS = 300
 INNER_TOL = 1e-5
 REG_STRENGTH = 1e-2
 OUTER_LR = 1e-3
+REFERENCE_ITERS = 2_000
+REFERENCE_TOL = 1e-10
 
 Backend = Literal["unrolled", "implicit"]
 Initialization = Literal["cold", "forward_warm"]
@@ -50,6 +54,7 @@ def run_experiment(
     config: ExperimentConfig,
     *,
     device: torch.device | str | None = None,
+    results_dir: Path | str | None = None,
 ) -> list[EpochMetrics]:
     device = _resolve_device(device)
     _seed_everything(config.seed)
@@ -65,6 +70,12 @@ def run_experiment(
         outer_optimizer,
         _build_state_strategy(config.initialization),
         device,
+        reference=ReferenceEvaluator(
+            num_classes=N_WAY,
+            reg_strength=REG_STRENGTH,
+            iters=REFERENCE_ITERS,
+            tol=REFERENCE_TOL,
+        ),
     )
 
     print(
@@ -76,13 +87,105 @@ def run_experiment(
     for epoch in range(1, NUM_EPOCHS + 1):
         metrics = trainer.train_epoch(loader)
         history.append(metrics)
+        errors = metrics.objective_errors
+        error_stds = metrics.objective_error_stds
+        if (
+            errors is None
+            or error_stds is None
+            or metrics.reverse_error is None
+            or metrics.reverse_error_std is None
+        ):
+            raise RuntimeError("Reference errors are missing.")
         print(
             f"epoch={epoch} "
             f"loss={metrics.loss:.6f} "
-            f"accuracy={100 * metrics.accuracy:.2f}%"
+            f"accuracy={100 * metrics.accuracy:.2f}% "
+            f"objective_error_initial={errors.initial:.6e}"
+            f"±{error_stds.initial:.2e} "
+            f"objective_error_idle={errors.idle:.6e}"
+            f"±{error_stds.idle:.2e} "
+            f"objective_error_final={errors.final:.6e}±{error_stds.final:.2e} "
+            f"reverse_error={metrics.reverse_error:.6e}"
+            f"±{metrics.reverse_error_std:.2e} "
+            f"forward_time={metrics.forward_time:.6f}"
+            f"±{metrics.forward_time_std:.2e}s "
+            f"backward_time={metrics.backward_time:.6f}"
+            f"±{metrics.backward_time_std:.2e}s"
         )
 
+    output_path = _save_history(config, history, results_dir)
+    print(f"results={output_path}")
     return history
+
+
+def _save_history(
+    config: ExperimentConfig,
+    history: list[EpochMetrics],
+    results_dir: Path | str | None,
+) -> Path:
+    directory = (
+        Path(results_dir)
+        if results_dir is not None
+        else Path(__file__).resolve().parent / "results"
+    )
+    directory.mkdir(parents=True, exist_ok=True)
+    output_path = directory / _result_filename(config)
+    fieldnames = [
+        "epoch",
+        "loss",
+        "accuracy",
+        "objective_error_initial_mean",
+        "objective_error_initial_std",
+        "objective_error_idle_mean",
+        "objective_error_idle_std",
+        "objective_error_final_mean",
+        "objective_error_final_std",
+        "reverse_error_mean",
+        "reverse_error_std",
+        "forward_time_seconds_mean",
+        "forward_time_seconds_std",
+        "backward_time_seconds_mean",
+        "backward_time_seconds_std",
+    ]
+    with output_path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        for epoch, metrics in enumerate(history, start=1):
+            if (
+                metrics.objective_errors is None
+                or metrics.objective_error_stds is None
+            ):
+                raise RuntimeError("Reference objective errors are missing.")
+            writer.writerow(
+                {
+                    "epoch": epoch,
+                    "loss": metrics.loss,
+                    "accuracy": metrics.accuracy,
+                    "objective_error_initial_mean": metrics.objective_errors.initial,
+                    "objective_error_initial_std": metrics.objective_error_stds.initial,
+                    "objective_error_idle_mean": metrics.objective_errors.idle,
+                    "objective_error_idle_std": metrics.objective_error_stds.idle,
+                    "objective_error_final_mean": metrics.objective_errors.final,
+                    "objective_error_final_std": metrics.objective_error_stds.final,
+                    "reverse_error_mean": metrics.reverse_error,
+                    "reverse_error_std": metrics.reverse_error_std,
+                    "forward_time_seconds_mean": metrics.forward_time,
+                    "forward_time_seconds_std": metrics.forward_time_std,
+                    "backward_time_seconds_mean": metrics.backward_time,
+                    "backward_time_seconds_std": metrics.backward_time_std,
+                }
+            )
+    return output_path
+
+
+def _result_filename(config: ExperimentConfig) -> str:
+    return (
+        f"backend={config.backend}_"
+        f"algorithm={config.algorithm.value}_"
+        f"initialization={config.initialization}_"
+        f"truncation={config.truncation}_"
+        f"seed={config.seed}.csv"
+    )
 
 
 def _build_meta_learner(config: ExperimentConfig) -> MetaLearner:
@@ -176,9 +279,15 @@ def _parse_args() -> argparse.Namespace:
         choices=("cold", "forward_warm"),
         default="cold",
     )
+    parser.add_argument(
+        "--algorithm",
+        choices=("gd", "hb", "nag"),
+        default="gd",
+    )
     parser.add_argument("--truncation", type=int, default=0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default=None)
+    parser.add_argument("--results-dir", default=None)
     return parser.parse_args()
 
 
@@ -187,11 +296,13 @@ def main() -> None:
     run_experiment(
         ExperimentConfig(
             backend=args.backend,
+            algorithm=Algorithm(args.algorithm),
             initialization=args.initialization,
             truncation=args.truncation,
             seed=args.seed,
         ),
         device=args.device,
+        results_dir=args.results_dir,
     )
 
 
