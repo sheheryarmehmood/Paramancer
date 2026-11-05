@@ -1,5 +1,6 @@
 from __future__ import annotations
-import torch
+
+import math
 
 
 class MomentumScheduler:
@@ -12,7 +13,7 @@ class MomentumScheduler:
         return (t_prev - 1) / self.t
     
     def restart(self):
-        self.t = torch.tensor(0.)
+        self.t = 0.0
     
     def _update(self):
-        self.t = (1 + torch.sqrt(1 + 4 * self.t ** 2)) / 2
+        self.t = (1 + math.sqrt(1 + 4 * self.t**2)) / 2

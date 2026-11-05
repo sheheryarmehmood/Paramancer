@@ -24,7 +24,7 @@ def l1_norm(p: torch.Tensor, scal: torch.Tensor) -> torch.Tensor:
 def l2_ball(
     p: torch.Tensor, rad: torch.Tensor, eps: float=1e-8
 ) -> torch.Tensor:
-    return p / torch.maximum(torch.ones(1).squeeze(), l2(p) / rad + eps)
+    return p / torch.maximum(p.new_ones(()), l2(p) / rad + eps)
 def l2_norm(
     p: torch.Tensor, scal: torch.Tensor, eps: float=1e-8
 ) -> torch.Tensor:
