@@ -26,6 +26,7 @@ class UnrolledBackend:
 
         self._truncation = truncation
         self._omega = float(omega)
+        self._idle_sol: AlgoVar | None = None
         self._fwd_sol: AlgoVar | None = None
 
     def __call__(
@@ -39,6 +40,7 @@ class UnrolledBackend:
         if self._truncation > total_iters:
             raise ValueError("`truncation` must not exceed `optimizer.iters`.")
 
+        self._idle_sol = None
         self._fwd_sol = None
         idle_iters = self._idle_iters()
         unrolled_iters = self._unrolled_iters(total_iters)
@@ -53,6 +55,7 @@ class UnrolledBackend:
                         iters=idle_iters,
                         **kwds,
                     )
+            self._idle_sol = new_init.clone()
             self._fwd_sol = optimizer(
                 new_init,
                 *args,
@@ -82,3 +85,11 @@ class UnrolledBackend:
                 "Forward solution accessed before `forward` ran."
             )
         return self._fwd_sol
+
+    @property
+    def idle_sol(self) -> AlgoVar:
+        if self._idle_sol is None:
+            raise RuntimeError(
+                "Idle solution accessed before the backend ran."
+            )
+        return self._idle_sol

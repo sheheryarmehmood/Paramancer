@@ -29,6 +29,7 @@ class BaseLearner:
         reg_strength: float | torch.Tensor,
     ) -> None:
         self._solver = solver
+        self._wb_init: BaseLearnerParamType | None = None
         self._wb: BaseLearnerParamType | None = None
         self._num_classes = num_classes
         self._reg_strength = reg_strength
@@ -65,6 +66,8 @@ class BaseLearner:
                 dtype=features.dtype,
             )
             self._wb = (weight, bias)
+
+        self._wb_init = tuple(tensor.detach().clone() for tensor in self._wb)
         
         momentum = solver_kwargs.get("momentum")
         needs_momentum = requires_momentum(self._solver.algorithm)
@@ -131,7 +134,14 @@ class BaseLearner:
                 "BaseLearner.fit() must be called before predict()."
             )
         
-        return self._predict(features, self._wb)
+        return self.predict_with(features, self._wb)
+
+    def predict_with(
+        self,
+        features: torch.Tensor,
+        wb: BaseLearnerParamType,
+    ) -> torch.Tensor:
+        return self._predict(features, wb)
     
     def _loss(
         self,
@@ -164,6 +174,19 @@ class BaseLearner:
             raise RuntimeError("No solution is available before fit().")
         
         return tuple(w.detach() for w in self._wb)
+
+    @property
+    def initial_params(self) -> BaseLearnerParamType:
+        if self._wb_init is None:
+            raise RuntimeError("No initialization is available before fit().")
+        return self._wb_init
+
+    @property
+    def idle_params(self) -> BaseLearnerParamType:
+        if self._solver.backend == "implicit":
+            return self.initial_params
+        weight, bias = self._solver.idle_solution
+        return weight.detach(), bias.detach()
 
     @property
     def adjoint_state(self) -> BaseLearnerAdjointType:

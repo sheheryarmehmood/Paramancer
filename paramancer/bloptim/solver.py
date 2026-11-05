@@ -44,6 +44,7 @@ class Solver:
                 f"Unsupported backend {backend!r}. "
                 f"Expected one of: unrolled, implicit."
             )
+        self._backend_name = backend
         if not isinstance(algorithm, Algorithm):
             raise TypeError("`algorithm` must be an `Algorithm`.")
         if backend == "unrolled":
@@ -60,6 +61,10 @@ class Solver:
     @property
     def algorithm(self) -> Algorithm:
         return self._algorithm
+
+    @property
+    def backend(self) -> str:
+        return self._backend_name
     
     def solve(
         self,
@@ -202,6 +207,15 @@ class Solver:
             if hasattr(sol, "first")
             else sol.data
         )
+
+    @property
+    def idle_solution(self) -> OptVarType:
+        if not isinstance(self._backend, UnrolledBackend):
+            raise TypeError(
+                "Idle solution is only available with the unrolled backend."
+            )
+        sol = self._backend.idle_sol
+        return sol.first.data if hasattr(sol, "first") else sol.data
 
     @property
     def adjoint_state(self) -> AlgoVarType:
