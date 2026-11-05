@@ -53,6 +53,18 @@ def test_meta_train_runs_epoch_and_updates_forward_cache():
     assert metrics.objective_errors.initial >= 0.0
     assert metrics.objective_errors.idle >= 0.0
     assert metrics.objective_errors.final >= 0.0
+    assert metrics.objective_error_stds is not None
+    assert metrics.objective_error_stds.initial >= 0.0
+    assert metrics.objective_error_stds.idle >= 0.0
+    assert metrics.objective_error_stds.final >= 0.0
+    assert metrics.reverse_error is not None
+    assert metrics.reverse_error >= 0.0
+    assert metrics.reverse_error_std is not None
+    assert metrics.reverse_error_std >= 0.0
+    assert metrics.forward_time > 0.0
+    assert metrics.forward_time_std >= 0.0
+    assert metrics.backward_time > 0.0
+    assert metrics.backward_time_std >= 0.0
     assert len(strategy) == 2
 
     initial_weight, initial_bias = base_learner.initial_params
