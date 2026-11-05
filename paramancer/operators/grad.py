@@ -25,8 +25,19 @@ def _set_req_grad(vars: tuple[torch.Tensor, ...], rgs: bool | tuple[bool, ...]):
 
 def gradient(smooth: PSmoothObjType, create_graph: bool = False):
     def grad_s(x: FlatVarLike, *args, **kwargs):
+        if create_graph:
+            x_was_var = is_flat_var(x)
+            x_data = x.data if x_was_var else x
+
+            def smooth_raw(x_raw: FlatRawVarType) -> torch.Tensor:
+                x_in = FlatVar(x_raw) if x_was_var else x_raw
+                return smooth(x_in, *args, **kwargs).sum()
+
+            result = torch.func.grad(smooth_raw)(x_data)
+            return FlatVar(result) if x_was_var else result
+
         create_graph_ = create_graph and torch.is_grad_enabled()
-        
+
         x_was_var = is_flat_var(x)
         x_data = x.data if x_was_var else x
         x_flat, x_spec = flatten_flat_raw(x_data)

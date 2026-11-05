@@ -43,6 +43,28 @@ def test_gradient_with_create_graph():
     assert torch.allclose(scale.grad, x)
 
 
+def test_gradient_with_create_graph_supports_vjp():
+    def smooth(wb, target):
+        weight, bias = wb
+        return 0.5 * (weight - target).square().sum() + 0.5 * bias.square().sum()
+
+    weight = torch.randn(3)
+    bias = torch.randn(2)
+    target = torch.randn(3)
+    weight_cotangent = torch.randn_like(weight)
+    bias_cotangent = torch.randn_like(bias)
+    grad_smooth = gradient(smooth, create_graph=True)
+
+    result, pullback = torch.func.vjp(grad_smooth, (weight, bias), target)
+    wb_grad, target_grad = pullback((weight_cotangent, bias_cotangent))
+
+    assert torch.allclose(result[0], weight - target)
+    assert torch.allclose(result[1], bias)
+    assert torch.allclose(wb_grad[0], weight_cotangent)
+    assert torch.allclose(wb_grad[1], bias_cotangent)
+    assert torch.allclose(target_grad, -weight_cotangent)
+
+
 
 def test_gradient_legacy():
     def smooth(x, u, a1, a2): # a1 and a2 can be non-tensors
