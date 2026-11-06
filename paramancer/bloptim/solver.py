@@ -35,7 +35,7 @@ class Solver:
         backend: str,
         algorithm: Algorithm,
         truncation: int = 0,
-        omega: float = 2,
+        omega: float = 1,
         tol: float = 1e-6,
         iters: int = 100,
     ):

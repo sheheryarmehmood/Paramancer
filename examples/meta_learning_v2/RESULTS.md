@@ -17,7 +17,7 @@ Let
 where
 
 \[
-K=300,\qquad \omega=2,\qquad E=5.
+K=150,\qquad \omega=1,\qquad E=5.
 \]
 
 Truncation applies only to unrolling. Hence the actual sweep is
@@ -62,9 +62,9 @@ N\text{-way} & 5\\
 \text{support examples per class} & 1\\
 \text{query examples per class} & 2\\
 \text{embedding dimension} & 64\\
-\text{inner iterations }K & 300\\
+\text{inner iterations }K & 150\\
 \text{inner tolerance} & 10^{-5}\\
-\lambda & 10^{-2}\\
+\lambda & 10^{-3}\\
 \text{outer learning rate} & 10^{-3}
 \end{array}
 \]
@@ -122,7 +122,7 @@ e_{\mathrm{rev}}
 g_K=\nabla_\theta J(w_K,\theta).
 \]
 
-Each epoch produces
+Each meta-batch produces
 
 \[
 \left(
@@ -137,17 +137,8 @@ t_{\mathrm{bwd}}
 \right).
 \]
 
-For \(e_0,e_{\mathrm{idle}},e_K,e_{\mathrm{rev}},t_{\mathrm{fwd}}\), and
-\(t_{\mathrm{bwd}}\), the per-run CSV stores
-
-\[
-\operatorname{mean}_{\text{meta-batches}}(\cdot),
-\qquad
-\operatorname{std}_{\text{meta-batches}}(\cdot),
-\]
-
-where the standard deviation is the population standard deviation. Loss is
-the query-weighted epoch mean and accuracy is the epoch query accuracy.
+The per-run CSV stores these raw meta-batch values. Means, medians, standard
+deviations, quantiles, and confidence intervals are computed afterward.
 
 Here
 
@@ -171,13 +162,14 @@ One file is written for every \(c\in\mathcal C\):
 backend=<B>_algorithm=<A>_initialization=<I>_truncation=<T>_seed=<S>.csv
 ```
 
-Each row represents one epoch. The per-run files are combined into
+Each row represents one meta-batch and contains its epoch and batch indices.
+The per-run files are combined into
 
 ```text
 results/summary.csv
 ```
 
-The per-run files contain only the epoch index and measured quantities. The
-summary additionally restores backend, algorithm, initialization, truncation,
-and seed from each filename. Cross-seed means, cross-seed standard deviations,
-tables, and plots are derived from the summary after the sweep.
+The per-run files contain only epoch and batch indices and measured quantities.
+The summary additionally restores backend, algorithm, initialization,
+truncation, and seed from each filename. Statistical summaries, tables, and
+plots are derived from the raw values after the sweep.

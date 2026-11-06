@@ -23,16 +23,16 @@ from .reference import ReferenceEvaluator
 from .train import EpochMetrics, MetaTrain
 from .util import build_class_index
 
-NUM_EPOCHS = 5
+NUM_EPOCHS = 1
 NUM_EPISODES = 20
 META_BATCH_SIZE = 2
 N_WAY = 5
 N_SUPPORT_PER_CLASS = 1
 N_QUERY_PER_CLASS = 2
 EMBEDDING_DIM = 64
-INNER_ITERS = 300
+INNER_ITERS = 150
 INNER_TOL = 1e-5
-REG_STRENGTH = 1e-2
+REG_STRENGTH = 1e-3
 OUTER_LR = 1e-3
 REFERENCE_ITERS = 2_000
 REFERENCE_TOL = 1e-10
@@ -132,49 +132,43 @@ def _save_history(
     output_path = directory / _result_filename(config)
     fieldnames = [
         "epoch",
+        "batch",
         "loss",
         "accuracy",
-        "objective_error_initial_mean",
-        "objective_error_initial_std",
-        "objective_error_idle_mean",
-        "objective_error_idle_std",
-        "objective_error_final_mean",
-        "objective_error_final_std",
-        "reverse_error_mean",
-        "reverse_error_std",
-        "forward_time_seconds_mean",
-        "forward_time_seconds_std",
-        "backward_time_seconds_mean",
-        "backward_time_seconds_std",
+        "objective_error_initial",
+        "objective_error_idle",
+        "objective_error_final",
+        "reverse_error",
+        "forward_time_seconds",
+        "backward_time_seconds",
     ]
     with output_path.open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=fieldnames)
         writer.writeheader()
         for epoch, metrics in enumerate(history, start=1):
-            if (
-                metrics.objective_errors is None
-                or metrics.objective_error_stds is None
+            for batch, batch_metrics in enumerate(
+                metrics.batch_metrics,
+                start=1,
             ):
-                raise RuntimeError("Reference objective errors are missing.")
-            writer.writerow(
-                {
-                    "epoch": epoch,
-                    "loss": metrics.loss,
-                    "accuracy": metrics.accuracy,
-                    "objective_error_initial_mean": metrics.objective_errors.initial,
-                    "objective_error_initial_std": metrics.objective_error_stds.initial,
-                    "objective_error_idle_mean": metrics.objective_errors.idle,
-                    "objective_error_idle_std": metrics.objective_error_stds.idle,
-                    "objective_error_final_mean": metrics.objective_errors.final,
-                    "objective_error_final_std": metrics.objective_error_stds.final,
-                    "reverse_error_mean": metrics.reverse_error,
-                    "reverse_error_std": metrics.reverse_error_std,
-                    "forward_time_seconds_mean": metrics.forward_time,
-                    "forward_time_seconds_std": metrics.forward_time_std,
-                    "backward_time_seconds_mean": metrics.backward_time,
-                    "backward_time_seconds_std": metrics.backward_time_std,
-                }
-            )
+                errors = batch_metrics.objective_errors
+                if errors is None or batch_metrics.reverse_error is None:
+                    raise RuntimeError("Reference errors are missing.")
+                writer.writerow(
+                    {
+                        "epoch": epoch,
+                        "batch": batch,
+                        "loss": batch_metrics.loss,
+                        "accuracy": (
+                            batch_metrics.correct / batch_metrics.num_queries
+                        ),
+                        "objective_error_initial": errors.initial,
+                        "objective_error_idle": errors.idle,
+                        "objective_error_final": errors.final,
+                        "reverse_error": batch_metrics.reverse_error,
+                        "forward_time_seconds": batch_metrics.forward_time,
+                        "backward_time_seconds": batch_metrics.backward_time,
+                    }
+                )
     return output_path
 
 

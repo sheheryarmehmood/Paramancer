@@ -65,6 +65,7 @@ def test_meta_train_runs_epoch_and_updates_forward_cache():
     assert metrics.forward_time_std >= 0.0
     assert metrics.backward_time > 0.0
     assert metrics.backward_time_std >= 0.0
+    assert len(metrics.batch_metrics) == 1
     assert len(strategy) == 2
 
     initial_weight, initial_bias = base_learner.initial_params

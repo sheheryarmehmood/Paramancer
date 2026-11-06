@@ -57,6 +57,7 @@ class EpochMetrics:
     forward_time_std: float = 0.0
     backward_time: float = 0.0
     backward_time_std: float = 0.0
+    batch_metrics: tuple[BatchMetrics, ...] = ()
 
 
 class MetaTrain:
@@ -94,9 +95,11 @@ class MetaTrain:
         reverse_error_values: list[float] = []
         forward_time_values: list[float] = []
         backward_time_values: list[float] = []
+        batch_metrics: list[BatchMetrics] = []
 
         for batch in loader:
             metrics = self.train_step(batch)
+            batch_metrics.append(metrics)
             total_loss += metrics.loss * metrics.num_queries
             total_correct += metrics.correct
             total_queries += metrics.num_queries
@@ -146,6 +149,7 @@ class MetaTrain:
             forward_time_std=pstdev(forward_time_values),
             backward_time=fmean(backward_time_values),
             backward_time_std=pstdev(backward_time_values),
+            batch_metrics=tuple(batch_metrics),
         )
 
     def train_step(self, batch: EpisodeBatch) -> BatchMetrics:

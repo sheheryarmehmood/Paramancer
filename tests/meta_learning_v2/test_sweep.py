@@ -5,7 +5,11 @@ from examples.meta_learning_v2.experiment import (
     _save_history,
 )
 from examples.meta_learning_v2.sweep import build_configs, combine_results
-from examples.meta_learning_v2.train import EpochMetrics, ObjectiveErrors
+from examples.meta_learning_v2.train import (
+    BatchMetrics,
+    EpochMetrics,
+    ObjectiveErrors,
+)
 from paramancer.bloptim.util import Algorithm
 
 
@@ -42,6 +46,18 @@ def test_combine_results_writes_summary(tmp_path):
         forward_time_std=0.04,
         backward_time=0.6,
         backward_time_std=0.06,
+        batch_metrics=(
+            BatchMetrics(
+                loss=1.0,
+                correct=1,
+                num_queries=2,
+                num_episodes=2,
+                objective_errors=ObjectiveErrors(0.3, 0.3, 0.1),
+                reverse_error=0.2,
+                forward_time=0.4,
+                backward_time=0.6,
+            ),
+        ),
     )
     for config in configs:
         _save_history(config, [metrics], tmp_path)
