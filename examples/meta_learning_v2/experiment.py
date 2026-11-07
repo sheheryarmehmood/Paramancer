@@ -23,7 +23,7 @@ from .reference import ReferenceEvaluator
 from .train import EpochMetrics, MetaTrain
 from .util import build_class_index
 
-NUM_EPOCHS = 1
+NUM_EPOCHS = 5
 NUM_EPISODES = 20
 META_BATCH_SIZE = 2
 N_WAY = 5

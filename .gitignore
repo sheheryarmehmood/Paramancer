@@ -11,6 +11,7 @@ storming.md
 storming.drawio
 examples/meta_learning/
 examples/meta_learning_v2/data/*
+examples/meta_learning_v2/figures/*
 examples/meta_learning_v2/results/*
 doc.md
 PLAN_DETAILS.md
